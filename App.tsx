@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useMemo } from 'react';
 import ReactFlow, {
   Node,
@@ -27,10 +28,11 @@ import StyleDNAEditor from './components/StyleDNAEditor';
 import ProjectStats from './components/ProjectStats';
 import NodeLibrary from './components/NodeLibrary';
 import ImagePreviewModal from './components/ImagePreviewModal';
+import BlueprintWizard from './components/BlueprintWizard';
 import { ImageZoomProvider } from './contexts/ImageZoomContext';
-import { generateFullGameBlueprint } from './services/geminiService';
+import { generateFullGameBlueprint, generateGameAsset } from './services/geminiService';
 import { DEFAULT_STYLE_DNA } from './constants';
-import { NodeData, NodeType, StyleDNA } from './types';
+import { NodeData, NodeType, StyleDNA, BlueprintParams } from './types';
 
 // Initial Nodes
 const initialNodes: Node<NodeData>[] = [
@@ -49,7 +51,7 @@ const initialNodes: Node<NodeData>[] = [
   {
     id: '3',
     type: 'custom',
-    position: { x: 400, y: 300 },
+    position: { x: 400, y: 300 }, 
     data: { label: 'Protagonist', type: 'character', subtype: 'protagonist', description: 'A lone wanderer with a glowing mechanical arm.', status: 'draft' } 
   }
 ];
@@ -66,6 +68,7 @@ function GameForgeBoard() {
   const [styleDNA, setStyleDNA] = useState<StyleDNA>(DEFAULT_STYLE_DNA);
   const [showStyleEditor, setShowStyleEditor] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  const [showBlueprintWizard, setShowBlueprintWizard] = useState(false);
   const [isGeneratingBlueprint, setIsGeneratingBlueprint] = useState(false);
 
   // Custom Node Types Registration
@@ -164,10 +167,65 @@ function GameForgeBoard() {
     });
   };
 
-  const handleGenerateBlueprint = async () => {
+  // --- Sequential Generation Logic ---
+  const generateImagesSequentially = async (nodesToProcess: Node<NodeData>[], edgesToProcess: Edge[]) => {
+    // We iterate sequentially to generate images one by one
+    for (const node of nodesToProcess) {
+      // Only process nodes that have a description and aren't already done (though new blueprint nodes are draft)
+      if (!node.data.description || node.data.locked) continue;
+
+      // 1. Update status to generating
+      setNodes((nds) => 
+        nds.map((n) => n.id === node.id ? { ...n, data: { ...n.data, status: 'generating' } } : n)
+      );
+
+      try {
+        // 2. Calculate Context from the blueprint structure
+        const incomingEdges = edgesToProcess.filter(e => e.target === node.id);
+        const parentNodes = nodesToProcess.filter(n => incomingEdges.some(e => e.source === n.id));
+        
+        let context = "";
+        if (parentNodes.length > 0) {
+           context = parentNodes.map(n => {
+             const type = n.data.subtype || n.data.type;
+             return `${type} "${n.data.label}": ${n.data.description}`;
+           }).join('\nContext: ');
+        }
+
+        // 3. Generate Image
+        // Use the current styleDNA from state
+        const imageUrl = await generateGameAsset(node.data.description, styleDNA, context);
+        
+        // 4. Update Node with Result
+        setNodes((nds) => 
+          nds.map((n) => n.id === node.id ? { 
+            ...n, 
+            data: { 
+              ...n.data, 
+              image: imageUrl || undefined, 
+              status: imageUrl ? 'done' : 'draft' 
+            } 
+          } : n)
+        );
+
+      } catch (error) {
+        console.error("Auto-generation failed for node", node.id, error);
+        setNodes((nds) => 
+          nds.map((n) => n.id === node.id ? { ...n, data: { ...n.data, status: 'draft' } } : n)
+        );
+      }
+    }
+  };
+
+  const handleBlueprintSubmit = async (params: BlueprintParams) => {
+    setShowBlueprintWizard(false);
     setIsGeneratingBlueprint(true);
+    
+    // Optionally update style DNA based on params here if desired, 
+    // but for now we just use the params for blueprint generation context.
+
     try {
-      const blueprint = await generateFullGameBlueprint();
+      const blueprint = await generateFullGameBlueprint(params);
       if (blueprint) {
         const newNodes: Node<NodeData>[] = blueprint.nodes.map(n => ({
           id: n.id,
@@ -191,13 +249,20 @@ function GameForgeBoard() {
 
         const layoutedNodes = organizeGraph(newNodes, newEdges);
 
+        // Update Graph
         setNodes(layoutedNodes);
         setEdges(newEdges);
-        // Maybe update title or style DNA based on blueprint title later
+        
+        // Hide loader so user can see the graph structure
+        setIsGeneratingBlueprint(false);
+
+        // Start generating images for the new nodes
+        generateImagesSequentially(layoutedNodes, newEdges);
+      } else {
+        setIsGeneratingBlueprint(false);
       }
     } catch (error) {
       console.error("Blueprint failed", error);
-    } finally {
       setIsGeneratingBlueprint(false);
     }
   };
@@ -239,8 +304,14 @@ function GameForgeBoard() {
              <div className="h-8 w-px bg-slate-700 mx-2"></div>
              <div className="flex items-center gap-1">
                <button 
-                 onClick={handleGenerateBlueprint}
-                 className="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-bold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-lg shadow-indigo-900/20 transition-all hover:scale-105"
+                 onClick={() => setShowBlueprintWizard(true)}
+                 disabled={isGeneratingBlueprint}
+                 className={`
+                   flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-bold text-white 
+                   bg-gradient-to-r from-indigo-600 to-violet-600 shadow-lg shadow-indigo-900/20 
+                   transition-all
+                   ${isGeneratingBlueprint ? 'opacity-50 cursor-not-allowed' : 'hover:from-indigo-500 hover:to-violet-500 hover:scale-105'}
+                 `}
                  title="Generate Full Game Blueprint"
                >
                  <BrainCircuit size={16} />
@@ -312,6 +383,14 @@ function GameForgeBoard() {
             styleDNA={styleDNA} 
             onChange={setStyleDNA} 
             onClose={() => setShowStyleEditor(false)} 
+          />
+        )}
+
+        {/* Blueprint Wizard Modal */}
+        {showBlueprintWizard && (
+          <BlueprintWizard 
+            onGenerate={handleBlueprintSubmit}
+            onClose={() => setShowBlueprintWizard(false)}
           />
         )}
 

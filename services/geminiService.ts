@@ -1,5 +1,6 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
-import { StyleDNA } from "../types";
+import { StyleDNA, BlueprintParams } from "../types";
 
 // In a real app, strict error handling would be here.
 // We assume process.env.API_KEY is available as per instructions.
@@ -104,14 +105,23 @@ interface BlueprintResponse {
   edges: BlueprintEdge[];
 }
 
-export const generateFullGameBlueprint = async (): Promise<BlueprintResponse | null> => {
+export const generateFullGameBlueprint = async (params: BlueprintParams): Promise<BlueprintResponse | null> => {
   try {
     const ai = getAiClient();
     const model = "gemini-2.5-flash";
 
     const prompt = `
-      Create a unique, creative, and cohesive game design blueprint.
-      The output must include a main World, 2-3 Zones, 1-2 Factions, key Scenes, a Protagonist, a Villain, and some unique Props/Weapons.
+      Act as a Lead Game Designer. Create a cohesive game design blueprint based on the following specification:
+      
+      CORE CONCEPT: ${params.prompt}
+      PLATFORM: ${params.platform}
+      PERSPECTIVE: ${params.perspective}
+      GENRE: ${params.genre || 'Not specified'}
+      ART STYLE: ${params.artStyle || 'Not specified'}
+      KEY MECHANICS: ${params.mechanics || 'Not specified'}
+      TARGET AUDIENCE: ${params.audience || 'General'}
+
+      The output must include a main World, 2-3 Zones, 1-2 Factions, key Scenes, a Protagonist, a Villain, and some unique Props/Weapons that fit this specific design.
       Ensure strict logical connection: World -> Zones -> Scenes -> Characters/Props.
       
       Valid Types: 'world', 'zone', 'scene', 'character', 'prop'.
@@ -124,7 +134,7 @@ export const generateFullGameBlueprint = async (): Promise<BlueprintResponse | n
 
       Return a JSON object with 'gameTitle', 'nodes' (array), and 'edges' (array).
       Ensure IDs are unique strings (e.g., 'n1', 'n2').
-      Descriptions should be vivid and visual (max 20 words).
+      Descriptions should be vivid and visual (max 20 words) and specifically tailored to the requested Genre and Mechanics.
     `;
 
     const response = await ai.models.generateContent({

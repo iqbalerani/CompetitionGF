@@ -41,3 +41,13 @@ export interface GeneratedAsset {
   prompt: string;
   timestamp: number;
 }
+
+export interface BlueprintParams {
+  prompt: string;
+  platform: string;
+  perspective: '2D' | '3D' | 'VR' | 'AR' | 'Text-Based';
+  genre: string;
+  artStyle: string;
+  mechanics: string;
+  audience: string;
+}
