@@ -24,6 +24,15 @@ const StyleDNAEditor: React.FC<StyleDNAEditorProps> = ({ styleDNA, onChange, onC
     });
   };
 
+  const updateColor = (type: 'primary' | 'accent', index: number, newColor: string) => {
+    const newColors = [...styleDNA.colorPalette[type]];
+    newColors[index] = newColor;
+    onChange({
+      ...styleDNA,
+      colorPalette: { ...styleDNA.colorPalette, [type]: newColors }
+    });
+  };
+
   return (
     <div className="absolute top-4 left-4 z-50 w-96 bg-slate-900/95 backdrop-blur shadow-2xl rounded-xl border border-slate-700 flex flex-col max-h-[90vh]">
       <div className="flex items-center justify-between p-4 border-b border-slate-700">
@@ -40,14 +49,46 @@ const StyleDNAEditor: React.FC<StyleDNAEditorProps> = ({ styleDNA, onChange, onC
         {/* Color Palette Section */}
         <div>
           <h3 className="text-xs font-bold text-slate-500 uppercase mb-3">Color Palette</h3>
-          <div className="flex gap-2 mb-2">
-            {styleDNA.colorPalette.primary.map((color, i) => (
-              <div key={i} className="w-8 h-8 rounded-full border border-slate-600" style={{ backgroundColor: color }} />
-            ))}
+          
+          {/* Primary Colors */}
+          <div className="mb-3">
+            <label className="text-[10px] text-slate-400 font-bold mb-1 block">Primary</label>
+            <div className="flex gap-2">
+              {styleDNA.colorPalette.primary.map((color, i) => (
+                <div key={`p-${i}`} className="relative w-8 h-8 rounded-full border border-slate-600 overflow-hidden hover:scale-110 transition-transform cursor-pointer shadow-sm group">
+                  <input 
+                    type="color" 
+                    value={color}
+                    onChange={(e) => updateColor('primary', i, e.target.value)}
+                    className="absolute inset-0 w-[150%] h-[150%] -top-1/4 -left-1/4 opacity-0 cursor-pointer"
+                  />
+                  <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: color }} />
+                </div>
+              ))}
+            </div>
           </div>
+
+          {/* Accent Colors */}
+          <div className="mb-3">
+            <label className="text-[10px] text-slate-400 font-bold mb-1 block">Accent</label>
+            <div className="flex gap-2">
+              {styleDNA.colorPalette.accent.map((color, i) => (
+                <div key={`a-${i}`} className="relative w-8 h-8 rounded-full border border-slate-600 overflow-hidden hover:scale-110 transition-transform cursor-pointer shadow-sm group">
+                  <input 
+                    type="color" 
+                    value={color}
+                    onChange={(e) => updateColor('accent', i, e.target.value)}
+                    className="absolute inset-0 w-[150%] h-[150%] -top-1/4 -left-1/4 opacity-0 cursor-pointer"
+                  />
+                  <div className="absolute inset-0 pointer-events-none" style={{ backgroundColor: color }} />
+                </div>
+              ))}
+            </div>
+          </div>
+
           <label className="block text-sm text-slate-300 mb-1">Mood</label>
           <select 
-            className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white"
+            className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white focus:outline-none focus:border-amber-500 transition-colors"
             value={styleDNA.colorPalette.mood}
             onChange={(e) => onChange({...styleDNA, colorPalette: {...styleDNA.colorPalette, mood: e.target.value as any}})}
           >
@@ -64,7 +105,7 @@ const StyleDNAEditor: React.FC<StyleDNAEditorProps> = ({ styleDNA, onChange, onC
           <h3 className="text-xs font-bold text-slate-500 uppercase mb-3">Lighting</h3>
           <label className="block text-sm text-slate-300 mb-1">Style</label>
           <select 
-            className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white mb-3"
+            className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white mb-3 focus:outline-none focus:border-amber-500 transition-colors"
             value={styleDNA.lighting.style}
             onChange={(e) => updateLighting('style', e.target.value)}
           >
@@ -90,7 +131,7 @@ const StyleDNAEditor: React.FC<StyleDNAEditorProps> = ({ styleDNA, onChange, onC
           <h3 className="text-xs font-bold text-slate-500 uppercase mb-3">Camera</h3>
           <label className="block text-sm text-slate-300 mb-1">Angle</label>
           <select 
-            className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white mb-3"
+            className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white mb-3 focus:outline-none focus:border-amber-500 transition-colors"
             value={styleDNA.camera.angle}
             onChange={(e) => updateCamera('angle', e.target.value)}
           >
@@ -113,7 +154,7 @@ const StyleDNAEditor: React.FC<StyleDNAEditorProps> = ({ styleDNA, onChange, onC
         <div>
            <h3 className="text-xs font-bold text-slate-500 uppercase mb-3">Art Direction</h3>
            <textarea 
-             className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white h-24"
+             className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white h-24 focus:outline-none focus:border-amber-500 transition-colors resize-none"
              value={styleDNA.artStyle.influences.join(', ')}
              onChange={(e) => onChange({...styleDNA, artStyle: {...styleDNA.artStyle, influences: e.target.value.split(', ')}})}
            />
