@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { StyleDNA, BlueprintParams } from "../types";
+import { StyleDNA, BlueprintParams, GameMode } from "../types";
 
 // In a real app, strict error handling would be here.
 // We assume process.env.API_KEY is available as per instructions.
@@ -44,22 +44,34 @@ export const generateDescription = async (
 export const generateGameAsset = async (
   prompt: string,
   styleDNA: StyleDNA,
-  context?: string
+  context: string = "",
+  gameMode: GameMode = '3D'
 ): Promise<string | null> => {
   try {
     const ai = getAiClient();
-    // Using flash-image for generation as per guidelines
     const model = "gemini-2.5-flash-image"; 
 
-    // Construct a rich prompt merging the specific request with the Style DNA
+    // Adjust instructions based on Game Mode
+    let perspectiveInstruction = "";
+    if (gameMode === '2D') {
+      perspectiveInstruction = "Perspective: 2D, flat, side-scrolling or top-down (as per context). Avoid 3D perspective distortion. Clean lines, sprite-sheet ready styling where applicable.";
+    } else {
+      perspectiveInstruction = "Perspective: 3D, cinematic, immersive depth. High fidelity rendering suitable for Unreal Engine 5 or Unity HDRP assets.";
+    }
+
     const fullPrompt = `
-      Concept art for a game. ${prompt}.
+      Create game concept art.
+      Subject: ${prompt}.
       ${context ? `Context: ${context}` : ''}
+      Mode: ${gameMode} Game Asset.
+      ${perspectiveInstruction}
+      
       Art Style: ${styleDNA.artStyle.rendering}, influenced by ${styleDNA.artStyle.influences.join(', ')}.
       Lighting: ${styleDNA.lighting.style}, intensity ${styleDNA.lighting.intensity}.
       Colors: ${styleDNA.colorPalette.mood} mood, palette: ${styleDNA.colorPalette.primary.join(', ')}.
       Camera: ${styleDNA.camera.angle}, FOV ${styleDNA.camera.fov}.
-      High quality, production ready, 4k.
+      
+      High quality, production ready.
     `;
 
     const response = await ai.models.generateContent({
@@ -69,7 +81,6 @@ export const generateGameAsset = async (
       },
     });
 
-    // Check for inline data (image)
     if (response.candidates?.[0]?.content?.parts) {
       for (const part of response.candidates[0].content.parts) {
         if (part.inlineData && part.inlineData.data) {
@@ -81,7 +92,6 @@ export const generateGameAsset = async (
     return null;
   } catch (error) {
     console.error("Gemini Image Generation Error:", error);
-    // Return a placeholder if generation fails (e.g., due to safety or limits)
     return `https://picsum.photos/seed/${Math.random()}/512/512`;
   }
 };
@@ -113,6 +123,7 @@ export const generateFullGameBlueprint = async (params: BlueprintParams): Promis
     const prompt = `
       Act as a Lead Game Designer. Create a cohesive game design blueprint based on the following specification:
       
+      GAME MODE: ${params.gameMode} (Critical: Ensure all assets and descriptions match this mode).
       CORE CONCEPT: ${params.prompt}
       PLATFORM: ${params.platform}
       PERSPECTIVE: ${params.perspective}
@@ -121,20 +132,29 @@ export const generateFullGameBlueprint = async (params: BlueprintParams): Promis
       KEY MECHANICS: ${params.mechanics || 'Not specified'}
       TARGET AUDIENCE: ${params.audience || 'General'}
 
-      The output must include a main World, 2-3 Zones, 1-2 Factions, key Scenes, a Protagonist, a Villain, and some unique Props/Weapons that fit this specific design.
-      Ensure strict logical connection: World -> Zones -> Scenes -> Characters/Props.
+      The output must include:
+      1. Main World/Map
+      2. 2-3 Zones/Levels (Use 'Tilemap' or 'Level Layout' if 2D, 'Terrain' if 3D)
+      3. Key Scenes
+      4. Protagonist & Antagonist
+      5. Core Mechanics (Use 'mechanic' type)
+      6. UI Elements (Use 'ui' type)
       
-      Valid Types: 'world', 'zone', 'scene', 'character', 'prop'.
-      Valid Subtypes: 
+      Ensure strict logical connection: World -> Zones -> Scenes -> Characters/Mechanics/UI.
+      
+      Valid Types: 'world', 'zone', 'scene', 'character', 'prop', 'mechanic', 'ui'.
+      Valid Subtypes (Prioritize based on ${params.gameMode}): 
         - world: 'world', 'faction'
-        - zone: 'zone', 'biome'
-        - scene: 'scene', 'key_art'
-        - character: 'protagonist', 'npc', 'creature', 'villain'
-        - prop: 'weapon', 'vehicle', 'prop'
+        - zone: 'zone', 'biome', 'tilemap' (2D), 'level' (2D), 'terrain' (3D), 'skybox' (3D)
+        - scene: 'scene', 'key_art', 'storyboard'
+        - character: 'protagonist', 'npc', 'creature', 'villain', 'sprite_sheet' (2D), 'mesh' (3D), 'rig' (3D)
+        - prop: 'weapon', 'vehicle', 'prop', 'icon' (2D), 'pickup'
+        - mechanic: 'system', 'loop', 'physics', 'platforming'
+        - ui: 'hud', 'menu', 'inventory'
 
       Return a JSON object with 'gameTitle', 'nodes' (array), and 'edges' (array).
       Ensure IDs are unique strings (e.g., 'n1', 'n2').
-      Descriptions should be vivid and visual (max 20 words) and specifically tailored to the requested Genre and Mechanics.
+      Descriptions should be vivid and visual (max 20 words).
     `;
 
     const response = await ai.models.generateContent({

@@ -1,5 +1,7 @@
 
-export type NodeType = 'world' | 'zone' | 'scene' | 'character' | 'prop';
+export type NodeType = 'world' | 'zone' | 'scene' | 'character' | 'prop' | 'mechanic' | 'ui';
+
+export type GameMode = '2D' | '3D';
 
 export interface StyleDNA {
   name: string;
@@ -45,9 +47,10 @@ export interface GeneratedAsset {
 export interface BlueprintParams {
   prompt: string;
   platform: string;
-  perspective: '2D' | '3D' | 'VR' | 'AR' | 'Text-Based';
+  perspective: string; // '2D' | '3D' etc
   genre: string;
   artStyle: string;
   mechanics: string;
   audience: string;
+  gameMode: GameMode; // Added to pass global context
 }

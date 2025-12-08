@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { Node, Edge } from 'reactflow';
-import { NodeData, StyleDNA } from '../types';
+import { NodeData, StyleDNA, GameMode } from '../types';
 import { NODE_TYPES_CONFIG } from '../constants';
 import { Sparkles, Wand2, Download, RefreshCw, Layers, Lock, Unlock, Maximize2 } from 'lucide-react';
 import { generateDescription, generateGameAsset } from '../services/geminiService';
@@ -12,9 +13,10 @@ interface GenerationPanelProps {
   onUpdateNode: (id: string, data: Partial<NodeData>) => void;
   edges: Edge[];
   nodes: Node<NodeData>[];
+  gameMode: GameMode;
 }
 
-const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDNA, onUpdateNode, edges, nodes }) => {
+const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDNA, onUpdateNode, edges, nodes, gameMode }) => {
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const { setZoomedImage } = useImageZoom();
@@ -28,7 +30,7 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
     );
   }
 
-  const config = NODE_TYPES_CONFIG[selectedNode.data.type];
+  const config = NODE_TYPES_CONFIG[selectedNode.data.type] || NODE_TYPES_CONFIG.prop;
   const isLocked = selectedNode.data.locked;
 
   const getParentContext = () => {
@@ -63,7 +65,8 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
     onUpdateNode(selectedNode.id, { status: 'generating' });
     try {
       const parentContext = getParentContext();
-      const imageUrl = await generateGameAsset(selectedNode.data.description, styleDNA, parentContext);
+      // Pass gameMode to generation service
+      const imageUrl = await generateGameAsset(selectedNode.data.description, styleDNA, parentContext, gameMode);
       if (imageUrl) {
         onUpdateNode(selectedNode.id, { image: imageUrl, status: 'done' });
       } else {
@@ -116,6 +119,13 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
           readOnly={isLocked}
           placeholder="Node Name"
         />
+        
+        {/* Mode Badge */}
+        <div className="absolute bottom-2 right-2 z-10">
+          <span className="text-[10px] font-bold bg-black/30 px-2 py-0.5 rounded text-white/80">
+            {gameMode}
+          </span>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -174,7 +184,7 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
           ) : isGeneratingImage ? (
             <> <RefreshCw className="animate-spin" /> Generating... </>
           ) : (
-            <> <Sparkles /> Generate Concept </>
+            <> <Sparkles /> Generate {gameMode} Concept </>
           )}
         </button>
 

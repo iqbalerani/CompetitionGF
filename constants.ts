@@ -2,7 +2,8 @@
 import { StyleDNA, NodeType } from './types';
 import { 
   Layout, Map, Image as ImageIcon, User, Box, 
-  Flag, CloudRain, Film, Star, Ghost, Sword, Car, Trees, Skull 
+  Flag, CloudRain, Film, Star, Ghost, Sword, Car, Trees, Skull,
+  Gamepad2, LayoutTemplate, Grid, Cuboid, Layers, Monitor, Disc
 } from 'lucide-react';
 
 export const DEFAULT_STYLE_DNA: StyleDNA = {
@@ -75,6 +76,22 @@ export const NODE_TYPES_CONFIG: Record<NodeType, {
     aspectRatio: 'aspect-square', // Square for items
     width: 'w-56'
   },
+  mechanic: { 
+    label: 'Mechanic', 
+    icon: Gamepad2, 
+    color: 'bg-violet-500', 
+    borderColor: 'border-violet-400',
+    aspectRatio: 'aspect-video',
+    width: 'w-64'
+  },
+  ui: { 
+    label: 'Interface', 
+    icon: LayoutTemplate, 
+    color: 'bg-fuchsia-500', 
+    borderColor: 'border-fuchsia-400',
+    aspectRatio: 'aspect-video',
+    width: 'w-64'
+  },
 };
 
 // Map specific subtypes to specific icons
@@ -88,43 +105,100 @@ export const SUBTYPE_ICONS: Record<string, any> = {
   'weapon': Sword,
   'vehicle': Car,
   'vegetation': Trees,
+  'tilemap': Grid,
+  'sprite': User,
+  'mesh': Cuboid,
+  'level': Layers,
+  'hud': Monitor,
+  'menu': LayoutTemplate,
+  'loop': Disc,
+  'system': Gamepad2
 };
 
-// Asset Library Structure
-export const ASSET_LIBRARY = [
+// 2D Specific Library
+export const ASSET_LIBRARY_2D = [
   {
-    category: 'World Building',
+    category: 'World & Levels',
     items: [
-      { type: 'world', subtype: 'world', label: 'World Map' },
-      { type: 'zone', subtype: 'zone', label: 'Zone / Region' },
-      { type: 'zone', subtype: 'biome', label: 'Biome' },
-      { type: 'world', subtype: 'faction', label: 'Faction' },
+      { type: 'world', subtype: 'world', label: 'World Map (2D)' },
+      { type: 'zone', subtype: 'level', label: 'Level Layout' },
+      { type: 'zone', subtype: 'tilemap', label: 'Tilemap / Grid' },
+      { type: 'zone', subtype: 'parallax', label: 'Parallax Background' },
     ]
   },
   {
-    category: 'Narrative & Scenes',
+    category: 'Characters & Sprites',
     items: [
-      { type: 'scene', subtype: 'scene', label: 'Environment' },
-      { type: 'scene', subtype: 'storyboard', label: 'Storyboard' },
-      { type: 'scene', subtype: 'key_art', label: 'Key Art' },
+      { type: 'character', subtype: 'sprite_sheet', label: 'Sprite Sheet' },
+      { type: 'character', subtype: 'portrait', label: 'Dialogue Portrait' },
+      { type: 'character', subtype: 'npc', label: 'NPC Sprite' },
+      { type: 'character', subtype: 'boss', label: 'Boss Sprite' },
     ]
   },
   {
-    category: 'Characters',
+    category: 'UI & HUD',
     items: [
-      { type: 'character', subtype: 'protagonist', label: 'Protagonist' },
-      { type: 'character', subtype: 'npc', label: 'NPC' },
-      { type: 'character', subtype: 'creature', label: 'Creature' },
-      { type: 'character', subtype: 'villain', label: 'Boss / Villain' },
+      { type: 'ui', subtype: 'hud', label: 'In-Game HUD' },
+      { type: 'ui', subtype: 'menu', label: 'Main Menu' },
+      { type: 'ui', subtype: 'inventory', label: 'Inventory Grid' },
     ]
   },
   {
-    category: 'Assets & Props',
+    category: 'Mechanics (2D)',
     items: [
-      { type: 'prop', subtype: 'weapon', label: 'Weapon' },
-      { type: 'prop', subtype: 'vehicle', label: 'Vehicle' },
-      { type: 'prop', subtype: 'vegetation', label: 'Vegetation' },
-      { type: 'prop', subtype: 'prop', label: 'Generic Prop' },
+      { type: 'mechanic', subtype: 'platforming', label: 'Platforming Logic' },
+      { type: 'mechanic', subtype: 'physics', label: '2D Physics' },
     ]
   },
+  {
+    category: 'Assets',
+    items: [
+      { type: 'prop', subtype: 'icon', label: 'Item Icon' },
+      { type: 'prop', subtype: 'pickup', label: 'Pickup Item' },
+    ]
+  }
+];
+
+// 3D Specific Library
+export const ASSET_LIBRARY_3D = [
+  {
+    category: 'World & Environments',
+    items: [
+      { type: 'world', subtype: 'world', label: 'World Map (3D)' },
+      { type: 'zone', subtype: 'terrain', label: 'Terrain / Heightmap' },
+      { type: 'zone', subtype: 'skybox', label: 'Skybox / HDR' },
+      { type: 'scene', subtype: 'scene', label: '3D Environment' },
+    ]
+  },
+  {
+    category: 'Characters & Models',
+    items: [
+      { type: 'character', subtype: 'mesh', label: 'Character Mesh' },
+      { type: 'character', subtype: 'rig', label: 'Rig / Skeleton' },
+      { type: 'character', subtype: 'npc', label: 'NPC Model' },
+    ]
+  },
+  {
+    category: 'UI & Interface',
+    items: [
+      { type: 'ui', subtype: 'hud', label: 'Diegetic HUD' },
+      { type: 'ui', subtype: 'menu', label: '3D Menu Scene' },
+    ]
+  },
+  {
+    category: 'Mechanics (3D)',
+    items: [
+      { type: 'mechanic', subtype: 'camera', label: 'Camera Controller' },
+      { type: 'mechanic', subtype: 'physics', label: 'RigidBody Physics' },
+      { type: 'mechanic', subtype: 'navmesh', label: 'NavMesh AI' },
+    ]
+  },
+  {
+    category: 'Assets',
+    items: [
+      { type: 'prop', subtype: 'prop', label: '3D Prop' },
+      { type: 'prop', subtype: 'vehicle', label: 'Vehicle Model' },
+      { type: 'prop', subtype: 'material', label: 'Texture / Material' },
+    ]
+  }
 ];

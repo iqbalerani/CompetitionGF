@@ -1,23 +1,30 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Gamepad2, Monitor, Smartphone, Globe, Box, Layers, Target, Wand2 } from 'lucide-react';
-import { BlueprintParams } from '../types';
+import { BlueprintParams, GameMode } from '../types';
 
 interface BlueprintWizardProps {
   onGenerate: (params: BlueprintParams) => void;
   onClose: () => void;
+  gameMode: GameMode;
 }
 
-const BlueprintWizard: React.FC<BlueprintWizardProps> = ({ onGenerate, onClose }) => {
+const BlueprintWizard: React.FC<BlueprintWizardProps> = ({ onGenerate, onClose, gameMode }) => {
   const [params, setParams] = useState<BlueprintParams>({
     prompt: '',
     platform: 'PC',
-    perspective: '3D',
+    perspective: gameMode, // Default to current global mode
     genre: '',
     artStyle: '',
     mechanics: '',
-    audience: ''
+    audience: '',
+    gameMode: gameMode 
   });
+
+  // Keep params in sync if needed, though initial state usually sufficient
+  useEffect(() => {
+    setParams(p => ({ ...p, perspective: gameMode, gameMode: gameMode }));
+  }, [gameMode]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,7 +46,7 @@ const BlueprintWizard: React.FC<BlueprintWizardProps> = ({ onGenerate, onClose }
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">Blueprint Engine</h2>
-              <p className="text-xs text-slate-400 uppercase tracking-wider">Game Concept Specification</p>
+              <p className="text-xs text-slate-400 uppercase tracking-wider">{gameMode} Mode Active</p>
             </div>
           </div>
           <button onClick={onClose} className="text-slate-500 hover:text-white transition-colors">
@@ -57,7 +64,7 @@ const BlueprintWizard: React.FC<BlueprintWizardProps> = ({ onGenerate, onClose }
             </label>
             <textarea 
               className="w-full h-24 bg-slate-800 border border-slate-700 rounded-xl p-4 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-600 resize-none"
-              placeholder="Describe your game idea... (e.g., A cyberpunk detective game where you hack memories to solve crimes in a rain-soaked metropolis)"
+              placeholder={`Describe your ${gameMode} game idea...`}
               value={params.prompt}
               onChange={(e) => setParams({...params, prompt: e.target.value})}
             />
@@ -136,7 +143,7 @@ const BlueprintWizard: React.FC<BlueprintWizardProps> = ({ onGenerate, onClose }
               <input 
                 type="text" 
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder:text-slate-600 text-sm"
-                placeholder="e.g. Pixel Art, Photorealistic, Low Poly"
+                placeholder={gameMode === '2D' ? "e.g. Pixel Art, Hand-Drawn" : "e.g. Realistic, Low Poly, Cel Shaded"}
                 value={params.artStyle}
                 onChange={(e) => setParams({...params, artStyle: e.target.value})}
               />
@@ -193,7 +200,7 @@ const BlueprintWizard: React.FC<BlueprintWizardProps> = ({ onGenerate, onClose }
             `}
           >
             <Wand2 size={16} />
-            Generate Blueprint
+            Generate {gameMode} Blueprint
           </button>
         </div>
       </div>

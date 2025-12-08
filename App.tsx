@@ -20,7 +20,9 @@ import {
   Save,
   Undo,
   BrainCircuit,
-  Loader2
+  Loader2,
+  Box,
+  Layers
 } from 'lucide-react';
 import CustomNode from './components/CustomNode';
 import GenerationPanel from './components/GenerationPanel';
@@ -32,7 +34,7 @@ import BlueprintWizard from './components/BlueprintWizard';
 import { ImageZoomProvider } from './contexts/ImageZoomContext';
 import { generateFullGameBlueprint, generateGameAsset } from './services/geminiService';
 import { DEFAULT_STYLE_DNA } from './constants';
-import { NodeData, NodeType, StyleDNA, BlueprintParams } from './types';
+import { NodeData, NodeType, StyleDNA, BlueprintParams, GameMode } from './types';
 
 // Initial Nodes
 const initialNodes: Node<NodeData>[] = [
@@ -70,6 +72,9 @@ function GameForgeBoard() {
   const [showStats, setShowStats] = useState(false);
   const [showBlueprintWizard, setShowBlueprintWizard] = useState(false);
   const [isGeneratingBlueprint, setIsGeneratingBlueprint] = useState(false);
+  
+  // Game Mode State (2D / 3D)
+  const [gameMode, setGameMode] = useState<GameMode>('3D');
 
   // Custom Node Types Registration
   const nodeTypes = useMemo<NodeTypes>(() => ({ custom: CustomNode }), []);
@@ -124,6 +129,9 @@ function GameForgeBoard() {
       'faction': 1,
       'zone': 2,
       'biome': 2,
+      'level': 2,
+      'tilemap': 2,
+      'terrain': 2,
       'scene': 3,
       'key_art': 3,
       'character': 4,
@@ -131,16 +139,22 @@ function GameForgeBoard() {
       'npc': 4,
       'creature': 4,
       'villain': 4,
-      'prop': 5,
-      'weapon': 5,
-      'vehicle': 5,
+      'sprite_sheet': 4,
+      'mesh': 4,
+      'mechanic': 5,
+      'system': 5,
+      'ui': 5,
+      'hud': 5,
+      'prop': 6,
+      'weapon': 6,
+      'vehicle': 6,
     };
 
     const grouped: Record<number, any[]> = {};
     
     newNodes.forEach(node => {
       // Use subtype first for ranking, fallback to type
-      const rank = typeRank[node.data.subtype] ?? typeRank[node.data.type] ?? 6;
+      const rank = typeRank[node.data.subtype] ?? typeRank[node.data.type] ?? 7;
       if (!grouped[rank]) grouped[rank] = [];
       grouped[rank].push(node);
     });
@@ -149,7 +163,7 @@ function GameForgeBoard() {
     const COL_WIDTH = 350;
 
     return newNodes.map(node => {
-      const rank = typeRank[node.data.subtype] ?? typeRank[node.data.type] ?? 6;
+      const rank = typeRank[node.data.subtype] ?? typeRank[node.data.type] ?? 7;
       const nodesInRank = grouped[rank] || [];
       const indexInRank = nodesInRank.findIndex(n => n.id === node.id);
       
@@ -193,8 +207,8 @@ function GameForgeBoard() {
         }
 
         // 3. Generate Image
-        // Use the current styleDNA from state
-        const imageUrl = await generateGameAsset(node.data.description, styleDNA, context);
+        // Use the current styleDNA from state and current Game Mode
+        const imageUrl = await generateGameAsset(node.data.description, styleDNA, context, gameMode);
         
         // 4. Update Node with Result
         setNodes((nds) => 
@@ -221,9 +235,8 @@ function GameForgeBoard() {
     setShowBlueprintWizard(false);
     setIsGeneratingBlueprint(true);
     
-    // Optionally update style DNA based on params here if desired, 
-    // but for now we just use the params for blueprint generation context.
-
+    // params includes the gameMode now
+    
     try {
       const blueprint = await generateFullGameBlueprint(params);
       if (blueprint) {
@@ -282,8 +295,8 @@ function GameForgeBoard() {
              <div className="absolute inset-0 bg-amber-500 blur-xl opacity-20 animate-pulse"></div>
              <Loader2 size={64} className="text-amber-500 animate-spin relative z-10" />
            </div>
-           <h2 className="mt-8 text-2xl font-bold text-white tracking-widest uppercase">Architecting Neural Blueprint</h2>
-           <p className="text-slate-400 mt-2 font-mono text-sm animate-pulse">Calculating graph connections...</p>
+           <h2 className="mt-8 text-2xl font-bold text-white tracking-widest uppercase">Architecting {gameMode} Blueprint</h2>
+           <p className="text-slate-400 mt-2 font-mono text-sm animate-pulse">Computing assets and logic flow...</p>
         </div>
       )}
 
@@ -301,7 +314,27 @@ function GameForgeBoard() {
                   <p className="text-[10px] text-slate-400 uppercase tracking-wider">Pre-Production Studio</p>
                 </div>
              </div>
+             
              <div className="h-8 w-px bg-slate-700 mx-2"></div>
+             
+             {/* 2D / 3D Toggle */}
+             <div className="flex bg-slate-950 rounded-md p-1 border border-slate-800">
+               <button 
+                 onClick={() => setGameMode('2D')}
+                 className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-bold transition-all ${gameMode === '2D' ? 'bg-indigo-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+               >
+                 <Layers size={12} /> 2D
+               </button>
+               <button 
+                 onClick={() => setGameMode('3D')}
+                 className={`flex items-center gap-1.5 px-3 py-1 rounded text-xs font-bold transition-all ${gameMode === '3D' ? 'bg-amber-600 text-white shadow' : 'text-slate-500 hover:text-slate-300'}`}
+               >
+                 <Box size={12} /> 3D
+               </button>
+             </div>
+
+             <div className="h-8 w-px bg-slate-700 mx-2"></div>
+
              <div className="flex items-center gap-1">
                <button 
                  onClick={() => setShowBlueprintWizard(true)}
@@ -312,7 +345,7 @@ function GameForgeBoard() {
                    transition-all
                    ${isGeneratingBlueprint ? 'opacity-50 cursor-not-allowed' : 'hover:from-indigo-500 hover:to-violet-500 hover:scale-105'}
                  `}
-                 title="Generate Full Game Blueprint"
+                 title={`Generate Full ${gameMode} Game Blueprint`}
                >
                  <BrainCircuit size={16} />
                  Blueprint
@@ -351,7 +384,7 @@ function GameForgeBoard() {
         {/* Node Library (Left) */}
         <div className="absolute left-4 top-24 bottom-4 z-10 pointer-events-none flex flex-col justify-start">
            <div className="pointer-events-auto">
-              <NodeLibrary onAddNode={addNewNode} />
+              <NodeLibrary onAddNode={addNewNode} gameMode={gameMode} />
            </div>
         </div>
 
@@ -372,8 +405,10 @@ function GameForgeBoard() {
           <Controls className="bg-slate-800 border-slate-700 fill-slate-400" />
           
           {/* Legend/Info Panel inside Canvas */}
-          <Panel position="bottom-center" className="bg-slate-900/50 backdrop-blur px-4 py-2 rounded-full border border-slate-800 text-xs text-slate-500">
-            {nodes.length} nodes • {edges.length} connections • Style: {styleDNA.name}
+          <Panel position="bottom-center" className="bg-slate-900/50 backdrop-blur px-4 py-2 rounded-full border border-slate-800 text-xs text-slate-500 flex gap-4">
+            <span>{nodes.length} nodes • {edges.length} connections</span>
+            <span className="text-slate-700">|</span>
+            <span className={gameMode === '2D' ? 'text-indigo-400 font-bold' : 'text-amber-400 font-bold'}>{gameMode} MODE ACTIVE</span>
           </Panel>
         </ReactFlow>
 
@@ -391,6 +426,7 @@ function GameForgeBoard() {
           <BlueprintWizard 
             onGenerate={handleBlueprintSubmit}
             onClose={() => setShowBlueprintWizard(false)}
+            gameMode={gameMode}
           />
         )}
 
@@ -411,6 +447,7 @@ function GameForgeBoard() {
            onUpdateNode={updateNodeData}
            nodes={nodes}
            edges={edges}
+           gameMode={gameMode}
          />
       </div>
 

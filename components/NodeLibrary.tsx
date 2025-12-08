@@ -1,20 +1,24 @@
 
 import React, { useState } from 'react';
 import { Search, ChevronDown, ChevronRight, Plus } from 'lucide-react';
-import { ASSET_LIBRARY, SUBTYPE_ICONS, NODE_TYPES_CONFIG } from '../constants';
-import { NodeType } from '../types';
+import { ASSET_LIBRARY_2D, ASSET_LIBRARY_3D, SUBTYPE_ICONS, NODE_TYPES_CONFIG } from '../constants';
+import { NodeType, GameMode } from '../types';
 
 interface NodeLibraryProps {
   onAddNode: (type: NodeType, subtype: string, label: string) => void;
+  gameMode: GameMode;
 }
 
-const NodeLibrary: React.FC<NodeLibraryProps> = ({ onAddNode }) => {
+const NodeLibrary: React.FC<NodeLibraryProps> = ({ onAddNode, gameMode }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
-    'World Building': true,
-    'Narrative & Scenes': true,
-    'Characters': true,
-    'Assets & Props': true,
+  // Determine which library to use
+  const LIBRARY = gameMode === '2D' ? ASSET_LIBRARY_2D : ASSET_LIBRARY_3D;
+
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>(() => {
+    // Initialize all categories as expanded
+    const initial: Record<string, boolean> = {};
+    LIBRARY.forEach(cat => initial[cat.category] = true);
+    return initial;
   });
 
   const toggleCategory = (category: string) => {
@@ -24,7 +28,7 @@ const NodeLibrary: React.FC<NodeLibraryProps> = ({ onAddNode }) => {
     }));
   };
 
-  const filteredLibrary = ASSET_LIBRARY.map(cat => ({
+  const filteredLibrary = LIBRARY.map(cat => ({
     ...cat,
     items: cat.items.filter(item => 
       item.label.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -36,7 +40,12 @@ const NodeLibrary: React.FC<NodeLibraryProps> = ({ onAddNode }) => {
     <div className="w-64 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-xl shadow-2xl flex flex-col overflow-hidden max-h-[80vh]">
       {/* Header */}
       <div className="p-3 border-b border-slate-800">
-        <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Asset Library</h2>
+        <div className="flex justify-between items-center mb-2">
+           <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Asset Library</h2>
+           <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${gameMode === '2D' ? 'bg-indigo-500/20 text-indigo-400' : 'bg-amber-500/20 text-amber-400'}`}>
+             {gameMode} MODE
+           </span>
+        </div>
         <div className="relative">
           <Search size={14} className="absolute left-2 top-2 text-slate-500" />
           <input 
@@ -65,7 +74,7 @@ const NodeLibrary: React.FC<NodeLibraryProps> = ({ onAddNode }) => {
               <div className="space-y-0.5 mt-1">
                 {category.items.map((item, idx) => {
                   // Resolve Icon
-                  const config = NODE_TYPES_CONFIG[item.type as NodeType];
+                  const config = NODE_TYPES_CONFIG[item.type as NodeType] || NODE_TYPES_CONFIG['prop'];
                   let Icon = config?.icon;
                   if (item.subtype && SUBTYPE_ICONS[item.subtype]) {
                     Icon = SUBTYPE_ICONS[item.subtype];
@@ -95,6 +104,11 @@ const NodeLibrary: React.FC<NodeLibraryProps> = ({ onAddNode }) => {
             )}
           </div>
         ))}
+        {filteredLibrary.length === 0 && (
+          <div className="p-4 text-center text-xs text-slate-500">
+            No assets found for {gameMode} mode.
+          </div>
+        )}
       </div>
     </div>
   );
