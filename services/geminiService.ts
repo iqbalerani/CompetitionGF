@@ -13,8 +13,39 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey: apiKey || 'dummy-key' });
 };
 
+const TYPE_SPECIFIC_INSTRUCTIONS: Record<string, string> = {
+  // World / Environment
+  'tilemap': 'Create a flat, orthogonal 2D tile set grid. Include ground tiles, edge tiles, wall variants, and environmental details. Modular and seamless.',
+  'level': 'Top-down level design schematic. Structural blueprint view. Show clear pathing, collision zones, platforms, and obstacle placement. Game design layout.',
+  'world': 'Stylized world map. Cartographic style with distinct biomes, landmarks, and travel routes. Top-down view.',
+  'parallax': 'Wide, horizontally seamless background layers. Distinct depth separation (foreground, midground, background). Atmospheric perspective.',
+  'skybox': 'Equirectangular skybox texture. Seamless horizon line. Atmospheric lighting (clouds, stars, sun).',
+  'terrain': '3D terrain heightmap or textured landscape render. Isometric or perspective view showing elevation changes.',
+  
+  // Characters
+  'sprite_sheet': 'Character sprite sheet sequence. Uniform scale. Idle, walk, run, and jump frames. Transparent background styling.',
+  'protagonist': 'Hero character concept art. Full body pose showing equipment and personality. Distinctive silhouette.',
+  'npc': 'Non-player character design. Standing pose with profession-related attire.',
+  'boss': 'Boss monster design. Intimidating scale, distinct weak points or visual flair.',
+  'portrait': 'Expressive character face portrait. High detail, focused on emotion and facial features.',
+
+  // UI
+  'hud': 'In-game Heads Up Display (HUD) overlay. Health bars, mini-map frame, ability icons, and status indicators. UX interface design.',
+  'menu': 'Game menu screen layout. Button containers, title logo placement, background paneling. UI/UX wireframe style.',
+  'inventory': 'Grid-based inventory system UI. Slot containers, item borders, and panel background.',
+  'icon': '2D Item Icon. Square composition. High readability at small sizes. Symbolic representation.',
+
+  // Props / Mechanics
+  'weapon': 'Weapon concept art. Clear side profile (for 2D) or perspective view (for 3D). Focus on mechanism and material.',
+  'vehicle': 'Vehicle design. Clear form and function.',
+  'pickup': 'Floating game pickup item. Glow effect or outline. Distinct silhouette for readability.',
+  'platforming': 'Platforming mechanic diagram. Showing jump arcs, moving platforms, and player traversal logic.',
+  'physics': 'Physics interaction diagram. Showing collision, gravity, or object manipulation.',
+};
+
 export const generateDescription = async (
   nodeType: string,
+  subtype: string | undefined,
   nodeName: string,
   context: string
 ): Promise<string> => {
@@ -22,11 +53,21 @@ export const generateDescription = async (
     const ai = getAiClient();
     const model = "gemini-2.5-flash";
     
+    const targetType = subtype || nodeType;
+
     const prompt = `
       You are a creative director for a game studio.
-      Write a concise, vivid visual description (max 50 words) for a ${nodeType} named "${nodeName}".
+      Write a concise, vivid visual description (max 50 words) for a ${targetType} named "${nodeName}".
+      
       Context/Influences: ${context}
-      Focus on visual elements suitable for concept art generation.
+      
+      Instructions:
+      - Focus on visual elements suitable for concept art generation.
+      - If it is a 'tilemap', describe the textures and ground types.
+      - If it is a 'level', describe the layout structure and obstacles.
+      - If it is a 'ui' element, describe the shapes, colors, and layout.
+      
+      Output exactly the description, nothing else.
     `;
 
     const response = await ai.models.generateContent({
@@ -44,6 +85,8 @@ export const generateDescription = async (
 export const generateGameAsset = async (
   prompt: string,
   styleDNA: StyleDNA,
+  nodeType: string,
+  nodeSubtype: string | undefined,
   context: string = "",
   gameMode: GameMode = '3D'
 ): Promise<string | null> => {
@@ -54,24 +97,30 @@ export const generateGameAsset = async (
     // Adjust instructions based on Game Mode
     let perspectiveInstruction = "";
     if (gameMode === '2D') {
-      perspectiveInstruction = "Perspective: 2D, flat, side-scrolling or top-down (as per context). Avoid 3D perspective distortion. Clean lines, sprite-sheet ready styling where applicable.";
+      perspectiveInstruction = "Perspective: Strictly 2D. Flat, orthographic, or side-scrolling. No perspective distortion unless isometric. Clean lines, suitable for sprites or UI.";
     } else {
       perspectiveInstruction = "Perspective: 3D, cinematic, immersive depth. High fidelity rendering suitable for Unreal Engine 5 or Unity HDRP assets.";
     }
 
+    // Get type-specific instructions
+    const typeInstruction = TYPE_SPECIFIC_INSTRUCTIONS[nodeSubtype || ''] || TYPE_SPECIFIC_INSTRUCTIONS[nodeType] || "";
+
     const fullPrompt = `
-      Create game concept art.
+      Create game concept art / asset.
+      Type: ${nodeSubtype || nodeType}.
       Subject: ${prompt}.
       ${context ? `Context: ${context}` : ''}
+      
       Mode: ${gameMode} Game Asset.
       ${perspectiveInstruction}
+      
+      Specific Structural Requirement: ${typeInstruction}
       
       Art Style: ${styleDNA.artStyle.rendering}, influenced by ${styleDNA.artStyle.influences.join(', ')}.
       Lighting: ${styleDNA.lighting.style}, intensity ${styleDNA.lighting.intensity}.
       Colors: ${styleDNA.colorPalette.mood} mood, palette: ${styleDNA.colorPalette.primary.join(', ')}.
-      Camera: ${styleDNA.camera.angle}, FOV ${styleDNA.camera.fov}.
       
-      High quality, production ready.
+      Ensure the output is a high-quality, production-ready asset for a game developer.
     `;
 
     const response = await ai.models.generateContent({
@@ -145,9 +194,9 @@ export const generateFullGameBlueprint = async (params: BlueprintParams): Promis
       Valid Types: 'world', 'zone', 'scene', 'character', 'prop', 'mechanic', 'ui'.
       Valid Subtypes (Prioritize based on ${params.gameMode}): 
         - world: 'world', 'faction'
-        - zone: 'zone', 'biome', 'tilemap' (2D), 'level' (2D), 'terrain' (3D), 'skybox' (3D)
+        - zone: 'zone', 'biome', 'tilemap' (2D), 'level' (2D), 'terrain' (3D), 'skybox' (3D), 'parallax' (2D)
         - scene: 'scene', 'key_art', 'storyboard'
-        - character: 'protagonist', 'npc', 'creature', 'villain', 'sprite_sheet' (2D), 'mesh' (3D), 'rig' (3D)
+        - character: 'protagonist', 'npc', 'creature', 'villain', 'sprite_sheet' (2D), 'mesh' (3D), 'rig' (3D), 'portrait' (2D)
         - prop: 'weapon', 'vehicle', 'prop', 'icon' (2D), 'pickup'
         - mechanic: 'system', 'loop', 'physics', 'platforming'
         - ui: 'hud', 'menu', 'inventory'
@@ -155,6 +204,7 @@ export const generateFullGameBlueprint = async (params: BlueprintParams): Promis
       Return a JSON object with 'gameTitle', 'nodes' (array), and 'edges' (array).
       Ensure IDs are unique strings (e.g., 'n1', 'n2').
       Descriptions should be vivid and visual (max 20 words).
+      For 'tilemap' or 'level' nodes, describe the layout structure specifically.
     `;
 
     const response = await ai.models.generateContent({

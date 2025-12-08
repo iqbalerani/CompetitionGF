@@ -208,7 +208,14 @@ function GameForgeBoard() {
 
         // 3. Generate Image
         // Use the current styleDNA from state and current Game Mode
-        const imageUrl = await generateGameAsset(node.data.description, styleDNA, context, gameMode);
+        const imageUrl = await generateGameAsset(
+          node.data.description, 
+          styleDNA, 
+          node.data.type,
+          node.data.subtype,
+          context, 
+          gameMode
+        );
         
         // 4. Update Node with Result
         setNodes((nds) => 

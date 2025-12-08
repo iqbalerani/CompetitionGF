@@ -52,7 +52,12 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
       const parentContext = getParentContext();
       const context = parentContext || "No specific parent context";
 
-      const desc = await generateDescription(selectedNode.data.type, selectedNode.data.label, context);
+      const desc = await generateDescription(
+        selectedNode.data.type, 
+        selectedNode.data.subtype, 
+        selectedNode.data.label, 
+        context
+      );
       onUpdateNode(selectedNode.id, { description: desc });
     } finally {
       setIsGeneratingDesc(false);
@@ -65,8 +70,15 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
     onUpdateNode(selectedNode.id, { status: 'generating' });
     try {
       const parentContext = getParentContext();
-      // Pass gameMode to generation service
-      const imageUrl = await generateGameAsset(selectedNode.data.description, styleDNA, parentContext, gameMode);
+      // Pass gameMode, type, and subtype to generation service
+      const imageUrl = await generateGameAsset(
+        selectedNode.data.description, 
+        styleDNA, 
+        selectedNode.data.type,
+        selectedNode.data.subtype,
+        parentContext, 
+        gameMode
+      );
       if (imageUrl) {
         onUpdateNode(selectedNode.id, { image: imageUrl, status: 'done' });
       } else {
