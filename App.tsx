@@ -22,7 +22,9 @@ import {
   BrainCircuit,
   Loader2,
   Box,
-  Layers
+  Layers,
+  Gamepad2,
+  Hammer
 } from 'lucide-react';
 import CustomNode from './components/CustomNode';
 import GenerationPanel from './components/GenerationPanel';
@@ -31,8 +33,9 @@ import ProjectStats from './components/ProjectStats';
 import NodeLibrary from './components/NodeLibrary';
 import ImagePreviewModal from './components/ImagePreviewModal';
 import BlueprintWizard from './components/BlueprintWizard';
+import GamePlayerModal from './components/GamePlayerModal';
 import { ImageZoomProvider } from './contexts/ImageZoomContext';
-import { generateFullGameBlueprint, generateGameAsset } from './services/geminiService';
+import { generateFullGameBlueprint, generateGameAsset, generatePlayableGame } from './services/geminiService';
 import { DEFAULT_STYLE_DNA } from './constants';
 import { NodeData, NodeType, StyleDNA, BlueprintParams, GameMode } from './types';
 
@@ -73,6 +76,11 @@ function GameForgeBoard() {
   const [showBlueprintWizard, setShowBlueprintWizard] = useState(false);
   const [isGeneratingBlueprint, setIsGeneratingBlueprint] = useState(false);
   
+  // Game Build State
+  const [isBuildingGame, setIsBuildingGame] = useState(false);
+  const [gameCode, setGameCode] = useState<string | null>(null);
+  const [showGamePlayer, setShowGamePlayer] = useState(false);
+
   // Game Mode State (2D / 3D)
   const [gameMode, setGameMode] = useState<GameMode>('3D');
   
@@ -293,6 +301,20 @@ function GameForgeBoard() {
     }
   };
 
+  const handleBuildGame = async () => {
+    setIsBuildingGame(true);
+    try {
+      const code = await generatePlayableGame(nodes, gameMode, styleDNA);
+      setGameCode(code);
+      setShowGamePlayer(true);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to build game prototype.");
+    } finally {
+      setIsBuildingGame(false);
+    }
+  };
+
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedNodeId) || null,
     [nodes, selectedNodeId]
@@ -301,7 +323,7 @@ function GameForgeBoard() {
   return (
     <div className="w-screen h-screen flex overflow-hidden bg-slate-950 text-slate-200 font-sans">
       
-      {/* Loading Overlay */}
+      {/* Loading Overlay - Blueprint */}
       {isGeneratingBlueprint && (
         <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center">
            <div className="relative">
@@ -310,6 +332,18 @@ function GameForgeBoard() {
            </div>
            <h2 className="mt-8 text-2xl font-bold text-white tracking-widest uppercase">Architecting {loadingPerspective} Blueprint</h2>
            <p className="text-slate-400 mt-2 font-mono text-sm animate-pulse">Computing assets and logic flow...</p>
+        </div>
+      )}
+
+      {/* Loading Overlay - Build Game */}
+      {isBuildingGame && (
+        <div className="absolute inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center">
+           <div className="relative group">
+             <div className="absolute inset-0 bg-green-500 blur-2xl opacity-20 animate-pulse"></div>
+             <Gamepad2 size={64} className="text-green-500 animate-bounce relative z-10" />
+           </div>
+           <h2 className="mt-8 text-2xl font-bold text-white tracking-widest uppercase">Compiling Game Prototype</h2>
+           <p className="text-green-400 mt-2 font-mono text-sm animate-pulse">Injecting assets • Generating physics • Baking lighting</p>
         </div>
       )}
 
@@ -351,18 +385,34 @@ function GameForgeBoard() {
              <div className="flex items-center gap-1">
                <button 
                  onClick={() => setShowBlueprintWizard(true)}
-                 disabled={isGeneratingBlueprint}
+                 disabled={isGeneratingBlueprint || isBuildingGame}
                  className={`
                    flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-bold text-white 
                    bg-gradient-to-r from-indigo-600 to-violet-600 shadow-lg shadow-indigo-900/20 
                    transition-all
-                   ${isGeneratingBlueprint ? 'opacity-50 cursor-not-allowed' : 'hover:from-indigo-500 hover:to-violet-500 hover:scale-105'}
+                   ${isGeneratingBlueprint || isBuildingGame ? 'opacity-50 cursor-not-allowed' : 'hover:from-indigo-500 hover:to-violet-500 hover:scale-105'}
                  `}
                  title={`Generate Full ${gameMode} Game Blueprint`}
                >
                  <BrainCircuit size={16} />
                  Blueprint
                </button>
+
+               <button 
+                 onClick={handleBuildGame}
+                 disabled={isGeneratingBlueprint || isBuildingGame || nodes.length < 2}
+                 className={`
+                   flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-bold text-white 
+                   bg-gradient-to-r from-green-600 to-emerald-600 shadow-lg shadow-green-900/20 
+                   transition-all ml-1
+                   ${isGeneratingBlueprint || isBuildingGame ? 'opacity-50 cursor-not-allowed' : 'hover:from-green-500 hover:to-emerald-500 hover:scale-105'}
+                 `}
+                 title="Build Playable Game Prototype"
+               >
+                 <Hammer size={16} />
+                 Build Game
+               </button>
+
                <div className="h-4 w-px bg-slate-700 mx-1"></div>
                <button 
                  onClick={() => setShowStyleEditor(!showStyleEditor)}
@@ -446,6 +496,14 @@ function GameForgeBoard() {
         {/* Stats Modal */}
         {showStats && (
           <ProjectStats nodes={nodes} onClose={() => setShowStats(false)} />
+        )}
+
+        {/* Game Player Modal */}
+        {showGamePlayer && gameCode && (
+          <GamePlayerModal 
+            gameCode={gameCode}
+            onClose={() => setShowGamePlayer(false)}
+          />
         )}
       </div>
 

@@ -272,3 +272,99 @@ export const generateFullGameBlueprint = async (params: BlueprintParams): Promis
     return null;
   }
 };
+
+export const generatePlayableGame = async (
+  nodes: any[], 
+  gameMode: string, 
+  styleDNA: StyleDNA
+): Promise<string> => {
+  try {
+    const ai = getAiClient();
+    const model = "gemini-2.5-flash"; 
+
+    // Construct a rich context with node descriptions and placeholders for images
+    // We use placeholders to prevent hitting token limits with large base64 strings
+    const contextNodes = nodes.map(n => {
+       const hasImage = !!n.data.image;
+       
+       let imageRef = "No image available";
+       if (hasImage) {
+         imageRef = `__GAMEFORGE_ASSET_${n.id}__`;
+       }
+
+       return `
+         Node ID: ${n.id}
+         Type: ${n.data.subtype || n.data.type}
+         Label: "${n.data.label}"
+         Description: ${n.data.description}
+         AssetReference: ${imageRef}
+       `;
+    }).join('\n----------------\n');
+
+    const prompt = `
+      Act as a Senior Game Engine Developer and Creative Coder.
+      Create a fully functional, playable single-file HTML5 game based on the following Design Blueprint.
+      
+      GAME SETTINGS:
+      - Mode: ${gameMode}
+      - Mood: ${styleDNA.colorPalette.mood}
+      - Primary Colors: ${styleDNA.colorPalette.primary.join(', ')}
+      - Accent Colors: ${styleDNA.colorPalette.accent.join(', ')}
+      
+      BLUEPRINT & ASSETS:
+      ${contextNodes}
+      
+      TECHNICAL REQUIREMENTS:
+      1. Output a SINGLE HTML file containing all CSS, HTML, and JavaScript.
+      2. If 3D: Use Three.js (Must import via CDN: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js).
+      3. If 2D: Use HTML5 Canvas API (Context 2D) - no external libraries unless absolutely necessary (e.g. Phaser via CDN).
+      4. IMPLEMENTATION DETAILS:
+         - Create a game loop (requestAnimationFrame).
+         - Implement player movement (WASD/Arrows).
+         - Implement at least one core mechanic derived from the blueprint (e.g., shooting, jumping, collecting).
+         - CRITICAL: For object textures/sprites, use the exact string provided in 'AssetReference' (e.g., "__GAMEFORGE_ASSET_1__") as the image source URL or texture path.
+         - Do NOT put base64 data in the code yourself. Just use the placeholder string as a string literal.
+         - If an object has "No image available", use procedural geometry (colored rectangles/cubes) matching the Style DNA colors.
+         - Handle window resizing.
+         - Add a simple UI overlay with the Game Title and Controls instructions.
+         - Ensure the camera perspective matches the requested mode (${gameMode} - ${styleDNA.camera.angle}).
+      
+      CRITICAL: The output must be raw HTML code only. Do not wrap it in markdown blocks (no \`\`\`html).
+      Ensure the code is complete and does not cut off.
+    `;
+
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+    });
+
+    let code = response.text || "";
+    // Cleanup if the model wraps it despite instructions
+    code = code.replace(/```html/g, '').replace(/```/g, '');
+
+    // Inject the actual Base64 data back into the generated code
+    nodes.forEach(n => {
+        if (n.data.image) {
+            const placeholder = `__GAMEFORGE_ASSET_${n.id}__`;
+            // Use split/join to replace all occurrences of the placeholder with the large base64 string
+            code = code.split(placeholder).join(n.data.image);
+        }
+    });
+
+    return code;
+
+  } catch (error) {
+    console.error("Game Generation Error:", error);
+    return `
+      <html>
+        <body style="background:#111; color: #f55; font-family: monospace; display: flex; align-items: center; justify-content: center; height: 100vh;">
+          <div style="text-align: center">
+            <h1>Game Build Failed</h1>
+            <p>The AI could not compile the game prototype at this time.</p>
+            <p>Error: ${error instanceof Error ? error.message : JSON.stringify(error)}</p>
+          </div>
+        </body>
+      </html>
+    `;
+  }
+};
