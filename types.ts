@@ -35,6 +35,7 @@ export interface NodeData {
   status?: 'draft' | 'generating' | 'done';
   locked?: boolean;
   tags?: string[];
+  perspective?: string; // Specific perspective setting (e.g. 'Isometric', 'VR')
 }
 
 export interface GeneratedAsset {

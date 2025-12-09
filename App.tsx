@@ -75,6 +75,9 @@ function GameForgeBoard() {
   
   // Game Mode State (2D / 3D)
   const [gameMode, setGameMode] = useState<GameMode>('3D');
+  
+  // State to track the perspective chosen in the wizard for the loading screen
+  const [loadingPerspective, setLoadingPerspective] = useState<string>('3D');
 
   // Custom Node Types Registration
   const nodeTypes = useMemo<NodeTypes>(() => ({ custom: CustomNode }), []);
@@ -214,7 +217,8 @@ function GameForgeBoard() {
           node.data.type,
           node.data.subtype,
           context, 
-          gameMode
+          gameMode,
+          node.data.perspective // Pass specific perspective if available
         );
         
         // 4. Update Node with Result
@@ -240,9 +244,10 @@ function GameForgeBoard() {
 
   const handleBlueprintSubmit = async (params: BlueprintParams) => {
     setShowBlueprintWizard(false);
+    setLoadingPerspective(params.perspective);
     setIsGeneratingBlueprint(true);
     
-    // params includes the gameMode now
+    // params includes the gameMode and perspective now
     
     try {
       const blueprint = await generateFullGameBlueprint(params);
@@ -256,7 +261,8 @@ function GameForgeBoard() {
             type: n.type as NodeType,
             subtype: n.subtype,
             description: n.description,
-            status: 'draft'
+            status: 'draft',
+            perspective: params.perspective // Save the blueprint perspective to the node
           }
         }));
 
@@ -302,7 +308,7 @@ function GameForgeBoard() {
              <div className="absolute inset-0 bg-amber-500 blur-xl opacity-20 animate-pulse"></div>
              <Loader2 size={64} className="text-amber-500 animate-spin relative z-10" />
            </div>
-           <h2 className="mt-8 text-2xl font-bold text-white tracking-widest uppercase">Architecting {gameMode} Blueprint</h2>
+           <h2 className="mt-8 text-2xl font-bold text-white tracking-widest uppercase">Architecting {loadingPerspective} Blueprint</h2>
            <p className="text-slate-400 mt-2 font-mono text-sm animate-pulse">Computing assets and logic flow...</p>
         </div>
       )}

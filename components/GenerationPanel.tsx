@@ -77,7 +77,8 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
         selectedNode.data.type,
         selectedNode.data.subtype,
         parentContext, 
-        gameMode
+        gameMode,
+        selectedNode.data.perspective // Pass specific perspective if set
       );
       if (imageUrl) {
         onUpdateNode(selectedNode.id, { image: imageUrl, status: 'done' });
@@ -132,8 +133,13 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
           placeholder="Node Name"
         />
         
-        {/* Mode Badge */}
-        <div className="absolute bottom-2 right-2 z-10">
+        {/* Mode & Perspective Badge */}
+        <div className="absolute bottom-2 right-2 z-10 flex gap-1">
+          {selectedNode.data.perspective && (
+             <span className="text-[10px] font-bold bg-black/30 px-2 py-0.5 rounded text-white/80">
+              {selectedNode.data.perspective}
+            </span>
+          )}
           <span className="text-[10px] font-bold bg-black/30 px-2 py-0.5 rounded text-white/80">
             {gameMode}
           </span>

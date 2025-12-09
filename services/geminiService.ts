@@ -88,18 +88,33 @@ export const generateGameAsset = async (
   nodeType: string,
   nodeSubtype: string | undefined,
   context: string = "",
-  gameMode: GameMode = '3D'
+  gameMode: GameMode = '3D',
+  perspectiveOverride?: string
 ): Promise<string | null> => {
   try {
     const ai = getAiClient();
     const model = "gemini-2.5-flash-image"; 
 
-    // Adjust instructions based on Game Mode
+    // Adjust instructions based on Game Mode and Perspective Override
     let perspectiveInstruction = "";
-    if (gameMode === '2D') {
-      perspectiveInstruction = "Perspective: Strictly 2D. Flat, orthographic, or side-scrolling. No perspective distortion unless isometric. Clean lines, suitable for sprites or UI.";
+    
+    if (perspectiveOverride && perspectiveOverride !== gameMode) {
+      // User has explicitly chosen a perspective in the blueprint wizard (e.g. Isometric, VR)
+      perspectiveInstruction = `Perspective: STRICTLY ${perspectiveOverride}.`;
+      if (perspectiveOverride === 'Isometric') {
+        perspectiveInstruction += " 3/4 view, parallel projection, no vanishing point. Suitable for isometric game assets.";
+      } else if (perspectiveOverride === 'Top-Down') {
+        perspectiveInstruction += " Directly from above. Map or plan view.";
+      } else if (perspectiveOverride === 'VR') {
+        perspectiveInstruction += " Immersive wide-angle or stereoscopic-ready composition.";
+      }
     } else {
-      perspectiveInstruction = "Perspective: 3D, cinematic, immersive depth. High fidelity rendering suitable for Unreal Engine 5 or Unity HDRP assets.";
+      // Fallback to standard Game Mode logic
+      if (gameMode === '2D') {
+        perspectiveInstruction = "Perspective: Strictly 2D. Flat, orthographic, or side-scrolling. No perspective distortion unless isometric. Clean lines, suitable for sprites or UI.";
+      } else {
+        perspectiveInstruction = "Perspective: 3D, cinematic, immersive depth. High fidelity rendering suitable for Unreal Engine 5 or Unity HDRP assets.";
+      }
     }
 
     // Get type-specific instructions
