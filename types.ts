@@ -1,4 +1,5 @@
 
+
 export type NodeType = 'world' | 'zone' | 'scene' | 'character' | 'prop' | 'mechanic' | 'ui';
 
 export type GameMode = '2D' | '3D';
@@ -21,6 +22,8 @@ export interface StyleDNA {
   };
   artStyle: {
     rendering: string;
+    era: string; // New: e.g. '8-bit', 'PS1-era', 'Next-Gen'
+    texture: string; // New: e.g. 'Pixelated', 'Hand-painted', 'Photorealistic'
     influences: string[];
   };
 }
@@ -31,6 +34,7 @@ export interface NodeData {
   subtype?: string; // New field for granular types (e.g., 'weapon', 'vehicle')
   description: string;
   image?: string; // Base64 or URL
+  depthMap?: string; // Base64 depth map for 3D generation
   styleOverrides?: Partial<StyleDNA>;
   status?: 'draft' | 'generating' | 'done';
   locked?: boolean;

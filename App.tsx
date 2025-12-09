@@ -1,4 +1,5 @@
 
+
 import React, { useState, useCallback, useMemo } from 'react';
 import ReactFlow, {
   Node,
@@ -35,7 +36,7 @@ import ImagePreviewModal from './components/ImagePreviewModal';
 import BlueprintWizard from './components/BlueprintWizard';
 import GamePlayerModal from './components/GamePlayerModal';
 import { ImageZoomProvider } from './contexts/ImageZoomContext';
-import { generateFullGameBlueprint, generateGameAsset, generatePlayableGame } from './services/geminiService';
+import { generateFullGameBlueprint, generateGameAsset, generatePlayableGame, generateAdaptiveStyleDNA } from './services/geminiService';
 import { DEFAULT_STYLE_DNA } from './constants';
 import { NodeData, NodeType, StyleDNA, BlueprintParams, GameMode } from './types';
 
@@ -193,7 +194,7 @@ function GameForgeBoard() {
   };
 
   // --- Sequential Generation Logic ---
-  const generateImagesSequentially = async (nodesToProcess: Node<NodeData>[], edgesToProcess: Edge[]) => {
+  const generateImagesSequentially = async (nodesToProcess: Node<NodeData>[], edgesToProcess: Edge[], currentStyleDNA: StyleDNA) => {
     // We iterate sequentially to generate images one by one
     for (const node of nodesToProcess) {
       // Only process nodes that have a description and aren't already done (though new blueprint nodes are draft)
@@ -218,10 +219,10 @@ function GameForgeBoard() {
         }
 
         // 3. Generate Image
-        // Use the current styleDNA from state and current Game Mode
+        // Use the passed currentStyleDNA (which might be newly generated)
         const imageUrl = await generateGameAsset(
           node.data.description, 
-          styleDNA, 
+          currentStyleDNA, 
           node.data.type,
           node.data.subtype,
           context, 
@@ -258,7 +259,19 @@ function GameForgeBoard() {
     // params includes the gameMode and perspective now
     
     try {
-      const blueprint = await generateFullGameBlueprint(params);
+      // Run blueprint creation and adaptive style generation in parallel for efficiency
+      const [blueprint, adaptiveStyle] = await Promise.all([
+        generateFullGameBlueprint(params),
+        generateAdaptiveStyleDNA(params)
+      ]);
+
+      // If we successfully generated a new style, update the global state
+      let activeStyleDNA = styleDNA;
+      if (adaptiveStyle) {
+        setStyleDNA(adaptiveStyle);
+        activeStyleDNA = adaptiveStyle;
+      }
+
       if (blueprint) {
         const newNodes: Node<NodeData>[] = blueprint.nodes.map(n => ({
           id: n.id,
@@ -290,8 +303,8 @@ function GameForgeBoard() {
         // Hide loader so user can see the graph structure
         setIsGeneratingBlueprint(false);
 
-        // Start generating images for the new nodes
-        generateImagesSequentially(layoutedNodes, newEdges);
+        // Start generating images using the NEW style
+        generateImagesSequentially(layoutedNodes, newEdges, activeStyleDNA);
       } else {
         setIsGeneratingBlueprint(false);
       }
@@ -331,7 +344,7 @@ function GameForgeBoard() {
              <Loader2 size={64} className="text-amber-500 animate-spin relative z-10" />
            </div>
            <h2 className="mt-8 text-2xl font-bold text-white tracking-widest uppercase">Architecting {loadingPerspective} Blueprint</h2>
-           <p className="text-slate-400 mt-2 font-mono text-sm animate-pulse">Computing assets and logic flow...</p>
+           <p className="text-slate-400 mt-2 font-mono text-sm animate-pulse">Computing assets & adapting Style DNA...</p>
         </div>
       )}
 

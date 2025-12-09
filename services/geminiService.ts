@@ -1,6 +1,6 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { StyleDNA, BlueprintParams, GameMode } from "../types";
+import { DEFAULT_STYLE_DNA } from "../constants";
 
 // In a real app, strict error handling would be here.
 // We assume process.env.API_KEY is available as per instructions.
@@ -47,28 +47,50 @@ export const generateDescription = async (
   nodeType: string,
   subtype: string | undefined,
   nodeName: string,
-  context: string
+  context: string,
+  existingDescription?: string
 ): Promise<string> => {
   try {
     const ai = getAiClient();
     const model = "gemini-2.5-flash";
     
     const targetType = subtype || nodeType;
+    let prompt = "";
 
-    const prompt = `
-      You are a creative director for a game studio.
-      Write a concise, vivid visual description (max 50 words) for a ${targetType} named "${nodeName}".
-      
-      Context/Influences: ${context}
-      
-      Instructions:
-      - Focus on visual elements suitable for concept art generation.
-      - If it is a 'tilemap', describe the textures and ground types.
-      - If it is a 'level', describe the layout structure and obstacles.
-      - If it is a 'ui' element, describe the shapes, colors, and layout.
-      
-      Output exactly the description, nothing else.
-    `;
+    if (existingDescription && existingDescription.trim().length > 0) {
+       // Enhance existing user input
+       prompt = `
+        You are a creative director for a game studio.
+        Enhance and refine the following description for a ${targetType} named "${nodeName}".
+
+        USER INPUT: "${existingDescription}"
+        
+        Context/Influences: ${context}
+        
+        Instructions:
+        - Keep the core intent of the user's input but make it more vivid and descriptive.
+        - Focus on visual details suitable for concept art generation.
+        - Fix any grammar issues and make it sound professional.
+        - Keep it under 60 words.
+        - Output exactly the enhanced description, nothing else.
+       `;
+    } else {
+       // Generate from scratch
+       prompt = `
+        You are a creative director for a game studio.
+        Write a concise, vivid visual description (max 50 words) for a ${targetType} named "${nodeName}".
+        
+        Context/Influences: ${context}
+        
+        Instructions:
+        - Focus on visual elements suitable for concept art generation.
+        - If it is a 'tilemap', describe the textures and ground types.
+        - If it is a 'level', describe the layout structure and obstacles.
+        - If it is a 'ui' element, describe the shapes, colors, and layout.
+        
+        Output exactly the description, nothing else.
+      `;
+    }
 
     const response = await ai.models.generateContent({
       model,
@@ -79,6 +101,112 @@ export const generateDescription = async (
   } catch (error) {
     console.error("Gemini Description Error:", error);
     return `Failed to generate description for ${nodeName}.`;
+  }
+};
+
+export const generateAdaptiveStyleDNA = async (
+  params: BlueprintParams | string
+): Promise<StyleDNA | null> => {
+  try {
+    const ai = getAiClient();
+    const model = "gemini-2.5-flash";
+
+    let inputDescription = "";
+    let gameMode = "3D";
+
+    if (typeof params === 'string') {
+      inputDescription = params;
+    } else {
+      inputDescription = `
+        Core Concept: ${params.prompt}
+        Genre: ${params.genre}
+        Platform: ${params.platform}
+        Audience: ${params.audience}
+        Art Intent: ${params.artStyle}
+        Perspective: ${params.perspective}
+      `;
+      gameMode = params.gameMode;
+    }
+
+    const prompt = `
+      Act as an Art Director.
+      Create a "Style DNA" visual guide configuration for a game based on the description below.
+      The output must be a JSON object matching the schema.
+
+      GAME DESCRIPTION:
+      ${inputDescription}
+
+      CRITICAL INSTRUCTIONS:
+      1. Game Mode is: ${gameMode}. 
+         - If '2D': Adapt the 'texture' and 'rendering' for 2D (e.g., 'Pixel Art', 'Vector', 'Hand-drawn').
+         - If '3D': Adapt for 3D (e.g., 'Low Poly', 'PBR Realistic', 'Cel Shaded').
+      2. 'era' should define the visual period (e.g., '8-bit Retro', '90s Arcade', 'PS1 Era', 'Modern', 'Futuristic').
+      3. 'texture' should define the surface detail style (e.g., 'Noisy Pixel', 'Flat', 'High-Res Diffuse', 'Painterly').
+      4. Colors should be cohesive.
+      5. Mood/Lighting should match the genre.
+
+      Output JSON format only.
+    `;
+
+    const response = await ai.models.generateContent({
+      model,
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            name: { type: Type.STRING },
+            version: { type: Type.STRING },
+            colorPalette: {
+              type: Type.OBJECT,
+              properties: {
+                primary: { type: Type.ARRAY, items: { type: Type.STRING } },
+                accent: { type: Type.ARRAY, items: { type: Type.STRING } },
+                mood: { type: Type.STRING, enum: ['warm', 'cool', 'neutral', 'vibrant', 'muted'] }
+              },
+              required: ['primary', 'accent', 'mood']
+            },
+            lighting: {
+              type: Type.OBJECT,
+              properties: {
+                style: { type: Type.STRING, enum: ['natural', 'studio', 'dramatic', 'soft', 'hard'] },
+                intensity: { type: Type.NUMBER }
+              },
+              required: ['style', 'intensity']
+            },
+            camera: {
+              type: Type.OBJECT,
+              properties: {
+                fov: { type: Type.NUMBER },
+                angle: { type: Type.STRING, enum: ['eye_level', 'low_angle', 'high_angle'] }
+              },
+              required: ['fov', 'angle']
+            },
+            artStyle: {
+              type: Type.OBJECT,
+              properties: {
+                rendering: { type: Type.STRING },
+                era: { type: Type.STRING },
+                texture: { type: Type.STRING },
+                influences: { type: Type.ARRAY, items: { type: Type.STRING } }
+              },
+              required: ['rendering', 'era', 'texture', 'influences']
+            }
+          },
+          required: ['name', 'colorPalette', 'lighting', 'camera', 'artStyle']
+        }
+      }
+    });
+
+    if (response.text) {
+      return JSON.parse(response.text) as StyleDNA;
+    }
+    return null;
+
+  } catch (error) {
+    console.error("Style DNA Generation Error:", error);
+    return null;
   }
 };
 
@@ -120,6 +248,10 @@ export const generateGameAsset = async (
     // Get type-specific instructions
     const typeInstruction = TYPE_SPECIFIC_INSTRUCTIONS[nodeSubtype || ''] || TYPE_SPECIFIC_INSTRUCTIONS[nodeType] || "";
 
+    // Safely handle potentially missing new fields if using old DNA
+    const era = styleDNA.artStyle.era || "Modern";
+    const texture = styleDNA.artStyle.texture || "Detailed";
+
     const fullPrompt = `
       Create game concept art / asset.
       Type: ${nodeSubtype || nodeType}.
@@ -131,11 +263,18 @@ export const generateGameAsset = async (
       
       Specific Structural Requirement: ${typeInstruction}
       
-      Art Style: ${styleDNA.artStyle.rendering}, influenced by ${styleDNA.artStyle.influences.join(', ')}.
-      Lighting: ${styleDNA.lighting.style}, intensity ${styleDNA.lighting.intensity}.
-      Colors: ${styleDNA.colorPalette.mood} mood, palette: ${styleDNA.colorPalette.primary.join(', ')}.
+      VISUAL STYLE (Strict Adherence):
+      - Era/Vibe: ${era}
+      - Texture Style: ${texture}
+      - Rendering: ${styleDNA.artStyle.rendering}
+      - Influences: ${styleDNA.artStyle.influences.join(', ')}
+      - Lighting: ${styleDNA.lighting.style} (${styleDNA.lighting.intensity * 100}% intensity)
+      - Colors: ${styleDNA.colorPalette.mood} mood, Dominant: ${styleDNA.colorPalette.primary.join(', ')}.
       
-      Ensure the output is a high-quality, production-ready asset for a game developer.
+      Ensure the output matches the "${era}" aesthetic perfectly. 
+      If 'Pixel Art', ensure crisp pixels. 
+      If 'Low Poly', ensure sharp facets.
+      If 'Nintendo-like', ensure vibrant, clean, rounded shapes.
     `;
 
     const response = await ai.models.generateContent({
@@ -157,6 +296,53 @@ export const generateGameAsset = async (
   } catch (error) {
     console.error("Gemini Image Generation Error:", error);
     return `https://picsum.photos/seed/${Math.random()}/512/512`;
+  }
+};
+
+export const generateDepthMap = async (originalImageBase64: string): Promise<string | null> => {
+  try {
+    const ai = getAiClient();
+    const model = "gemini-2.5-flash-image";
+
+    // Extract raw base64 data if it has the data prefix
+    const base64Data = originalImageBase64.split(',')[1] || originalImageBase64;
+
+    const prompt = `
+      Generate a high-quality grayscale DEPTH MAP for the provided image.
+      - White represents pixels closest to the camera.
+      - Black represents pixels furthest away.
+      - Ensure smooth gradients to create a high-quality 3D displacement effect.
+      - Do not change the composition, just output the depth information.
+      - High contrast is preferred.
+    `;
+
+    const response = await ai.models.generateContent({
+      model,
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              mimeType: 'image/png',
+              data: base64Data
+            }
+          },
+          { text: prompt }
+        ]
+      },
+    });
+
+    if (response.candidates?.[0]?.content?.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData && part.inlineData.data) {
+           return `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
+        }
+      }
+    }
+    return null;
+
+  } catch (error) {
+    console.error("Depth Map Generation Error:", error);
+    return null;
   }
 };
 
@@ -287,7 +473,7 @@ export const generatePlayableGame = async (
     const contextNodes = nodes.map(n => {
        const hasImage = !!n.data.image;
        
-       let imageRef = "No image available";
+       let imageRef = "undefined";
        if (hasImage) {
          imageRef = `__GAMEFORGE_ASSET_${n.id}__`;
        }
@@ -303,34 +489,93 @@ export const generatePlayableGame = async (
 
     const prompt = `
       Act as a Senior Game Engine Developer and Creative Coder.
-      Create a fully functional, playable single-file HTML5 game based on the following Design Blueprint.
+      Generate a SINGLE HTML file containing a playable game prototype.
       
-      GAME SETTINGS:
-      - Mode: ${gameMode}
-      - Mood: ${styleDNA.colorPalette.mood}
-      - Primary Colors: ${styleDNA.colorPalette.primary.join(', ')}
-      - Accent Colors: ${styleDNA.colorPalette.accent.join(', ')}
+      TARGET SPEC:
+      - Mode: ${gameMode} (CRITICAL: Use ${gameMode === '3D' ? 'Three.js' : 'HTML5 Canvas API'})
+      - Title: Game Prototype
+      - Visual Theme: ${styleDNA.colorPalette.mood} / ${styleDNA.artStyle.era}
       
-      BLUEPRINT & ASSETS:
+      BLUEPRINT DATA:
       ${contextNodes}
       
-      TECHNICAL REQUIREMENTS:
-      1. Output a SINGLE HTML file containing all CSS, HTML, and JavaScript.
-      2. If 3D: Use Three.js (Must import via CDN: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js).
-      3. If 2D: Use HTML5 Canvas API (Context 2D) - no external libraries unless absolutely necessary (e.g. Phaser via CDN).
-      4. IMPLEMENTATION DETAILS:
-         - Create a game loop (requestAnimationFrame).
-         - Implement player movement (WASD/Arrows).
-         - Implement at least one core mechanic derived from the blueprint (e.g., shooting, jumping, collecting).
-         - CRITICAL: For object textures/sprites, use the exact string provided in 'AssetReference' (e.g., "__GAMEFORGE_ASSET_1__") as the image source URL or texture path.
-         - Do NOT put base64 data in the code yourself. Just use the placeholder string as a string literal.
-         - If an object has "No image available", use procedural geometry (colored rectangles/cubes) matching the Style DNA colors.
-         - Handle window resizing.
-         - Add a simple UI overlay with the Game Title and Controls instructions.
-         - Ensure the camera perspective matches the requested mode (${gameMode} - ${styleDNA.camera.angle}).
+      CRITICAL IMPLEMENTATION REQUIREMENTS:
       
-      CRITICAL: The output must be raw HTML code only. Do not wrap it in markdown blocks (no \`\`\`html).
-      Ensure the code is complete and does not cut off.
+      1. HTML STRUCTURE:
+         - <style> 
+             body { margin: 0; overflow: hidden; background: #000; } 
+             canvas { display: block; position: absolute; top: 0; left: 0; z-index: 0; } 
+             #ui-layer { 
+                position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+                display: flex; flex-direction: column; justify-content: center; align-items: center; 
+                background: rgba(0,0,0,0.8); color: white; font-family: sans-serif; z-index: 10; 
+                transition: opacity 0.5s; 
+             } 
+             .hidden { opacity: 0; pointer-events: none; } 
+           </style>
+         - <div id="game-container"></div>
+         - <div id="ui-layer">
+             <h1 style="font-size: 3rem; margin-bottom: 20px; text-shadow: 0 0 20px ${styleDNA.colorPalette.primary[0] || '#fff'};">${styleDNA.name || 'Game Prototype'}</h1>
+             <p style="margin-bottom: 30px; font-size: 1.2rem;">Use WASD or Arrows to Move. Space to Interact.</p>
+             <button id="start-btn" style="
+               padding: 15px 40px; font-size: 20px; font-weight: bold; cursor: pointer; 
+               background: ${styleDNA.colorPalette.accent[0] || '#f00'}; 
+               color: white; border: none; border-radius: 8px; box-shadow: 0 0 15px ${styleDNA.colorPalette.accent[0] || '#f00'};
+               transition: transform 0.1s;
+             ">START GAME</button>
+           </div>
+           
+      2. GAME LOGIC (SCRIPT):
+         - Initialize the engine (${gameMode === '3D' ? 'Three.js scene, camera, renderer' : 'Canvas context'}) IMMEDIATELY upon load. Do NOT wait for start button to render the initial background.
+         - GAME STATE: Create a variable 'isPlaying = false'.
+         - START INTERACTION: 
+             document.getElementById('start-btn').addEventListener('click', () => {
+                document.getElementById('ui-layer').classList.add('hidden');
+                isPlaying = true;
+                // Init audio context if needed here
+             });
+             
+         - GAME LOOP:
+             function animate() {
+                requestAnimationFrame(animate);
+                
+                // ALWAYS RENDER THE SCENE (background/idle animation)
+                ${gameMode === '3D' ? 'renderer.render(scene, camera);' : 'ctx.clearRect(0,0,cw,ch); drawBackground();'}
+                
+                if (isPlaying) {
+                   updatePhysics();
+                   updatePlayer();
+                   ${gameMode === '2D' ? 'drawGameEntities();' : ''}
+                } else {
+                   // Optional: Rotate camera or background idle animation
+                }
+             }
+             animate();
+           
+      3. ${gameMode === '3D' ? 'THREE.JS SPECIFICS' : '2D CANVAS SPECIFICS'}:
+         ${gameMode === '3D' ? `
+         - Import Three.js: <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+         - Setup: Scene, PerspectiveCamera (pos z:10, y:5), WebGLRenderer (setSize window.innerWidth/Height).
+         - Lights: AmbientLight (0.5) AND DirectionalLight (1.0) so models are visible.
+         - Environment: Create a large PlaneGeometry for the ground (color: ${styleDNA.colorPalette.primary[0] || '#333'}).
+         - Player: BoxGeometry or Sprite. Map 'AssetReference' texture if available.
+         ` : `
+         - Canvas: Get context '2d'. Set canvas width/height to window.innerWidth/Height.
+         - Background: FillRect with ${styleDNA.colorPalette.primary[0] || '#111'}.
+         - Player: DrawRect or drawImage.
+         `}
+         
+      4. ASSET HANDLING:
+         - I will provide placeholders like "__GAMEFORGE_ASSET_X__".
+         - Use these strings directly in the code (e.g. img.src = "__GAMEFORGE_ASSET_X__").
+         - CRITICAL: Handle async loading. If an image is loading or fails, draw a fallback colored box so the game is still playable.
+         
+      5. MECHANICS:
+         - Implement WASD / Arrow Key movement.
+         - Keep player within screen/map bounds.
+         - Add at least one interactive element from the blueprint (e.g., a pickup or obstacle).
+         
+      OUTPUT RAW HTML ONLY. NO MARKDOWN. DO NOT WRAP IN \`\`\`.
     `;
 
     const response = await ai.models.generateContent({

@@ -1,6 +1,9 @@
-import React from 'react';
+
+
+import React, { useState } from 'react';
 import { StyleDNA } from '../types';
-import { X, Sliders } from 'lucide-react';
+import { X, Sliders, Wand2, Loader2 } from 'lucide-react';
+import { generateAdaptiveStyleDNA } from '../services/geminiService';
 
 interface StyleDNAEditorProps {
   styleDNA: StyleDNA;
@@ -9,7 +12,9 @@ interface StyleDNAEditorProps {
 }
 
 const StyleDNAEditor: React.FC<StyleDNAEditorProps> = ({ styleDNA, onChange, onClose }) => {
-  
+  const [magicPrompt, setMagicPrompt] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+
   const updateLighting = (key: keyof StyleDNA['lighting'], value: any) => {
     onChange({
       ...styleDNA,
@@ -24,6 +29,13 @@ const StyleDNAEditor: React.FC<StyleDNAEditorProps> = ({ styleDNA, onChange, onC
     });
   };
 
+  const updateArtStyle = (key: keyof StyleDNA['artStyle'], value: any) => {
+    onChange({
+        ...styleDNA,
+        artStyle: { ...styleDNA.artStyle, [key]: value }
+    });
+  };
+
   const updateColor = (type: 'primary' | 'accent', index: number, newColor: string) => {
     const newColors = [...styleDNA.colorPalette[type]];
     newColors[index] = newColor;
@@ -31,6 +43,22 @@ const StyleDNAEditor: React.FC<StyleDNAEditorProps> = ({ styleDNA, onChange, onC
       ...styleDNA,
       colorPalette: { ...styleDNA.colorPalette, [type]: newColors }
     });
+  };
+
+  const handleMagicGenerate = async () => {
+    if (!magicPrompt) return;
+    setIsGenerating(true);
+    try {
+        // We pass the prompt as a string to the adaptive generator
+        const newDNA = await generateAdaptiveStyleDNA(magicPrompt);
+        if (newDNA) {
+            onChange(newDNA);
+        }
+    } catch (e) {
+        console.error("Failed to generate DNA", e);
+    } finally {
+        setIsGenerating(false);
+    }
   };
 
   return (
@@ -46,6 +74,73 @@ const StyleDNAEditor: React.FC<StyleDNAEditorProps> = ({ styleDNA, onChange, onC
       </div>
 
       <div className="overflow-y-auto p-4 space-y-6">
+        
+        {/* Magic Generator */}
+        <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 p-3 rounded-lg border border-indigo-500/30">
+            <h3 className="text-xs font-bold text-indigo-300 uppercase mb-2 flex items-center gap-2">
+                <Wand2 size={12} /> Auto-Tune Style
+            </h3>
+            <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={magicPrompt}
+                  onChange={(e) => setMagicPrompt(e.target.value)}
+                  placeholder="e.g. 'Cyberpunk Nintendo 64 game'..."
+                  className="flex-1 bg-slate-900/50 border border-slate-700 rounded text-xs px-2 py-1.5 text-white focus:outline-none focus:border-indigo-500"
+                />
+                <button 
+                  onClick={handleMagicGenerate}
+                  disabled={isGenerating || !magicPrompt}
+                  className="bg-indigo-600 hover:bg-indigo-500 text-white rounded px-3 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <Wand2 size={14} />}
+                </button>
+            </div>
+        </div>
+
+        {/* Art Style Section (Enhanced) */}
+        <div>
+           <h3 className="text-xs font-bold text-slate-500 uppercase mb-3">Art Direction</h3>
+           
+           <div className="grid grid-cols-2 gap-3 mb-3">
+             <div>
+                <label className="block text-[10px] text-slate-400 font-bold mb-1">Visual Era</label>
+                <input 
+                    type="text"
+                    value={styleDNA.artStyle.era || ''}
+                    onChange={(e) => updateArtStyle('era', e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                    placeholder="e.g. Retro, Modern"
+                />
+             </div>
+             <div>
+                <label className="block text-[10px] text-slate-400 font-bold mb-1">Texture Style</label>
+                <input 
+                    type="text"
+                    value={styleDNA.artStyle.texture || ''}
+                    onChange={(e) => updateArtStyle('texture', e.target.value)}
+                    className="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                    placeholder="e.g. Pixelated, PBR"
+                />
+             </div>
+           </div>
+
+           <label className="block text-[10px] text-slate-400 font-bold mb-1">Rendering Technique</label>
+           <input 
+                type="text"
+                value={styleDNA.artStyle.rendering}
+                onChange={(e) => updateArtStyle('rendering', e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded p-1.5 text-xs text-white mb-3 focus:outline-none focus:border-amber-500"
+           />
+
+           <label className="block text-[10px] text-slate-400 font-bold mb-1">Influences (Comma Separated)</label>
+           <textarea 
+             className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-xs text-white h-16 focus:outline-none focus:border-amber-500 transition-colors resize-none"
+             value={styleDNA.artStyle.influences.join(', ')}
+             onChange={(e) => updateArtStyle('influences', e.target.value.split(', '))}
+           />
+        </div>
+
         {/* Color Palette Section */}
         <div>
           <h3 className="text-xs font-bold text-slate-500 uppercase mb-3">Color Palette</h3>
@@ -148,17 +243,6 @@ const StyleDNAEditor: React.FC<StyleDNAEditorProps> = ({ styleDNA, onChange, onC
             onChange={(e) => updateCamera('fov', parseInt(e.target.value))}
             className="w-full accent-amber-500"
           />
-        </div>
-
-        {/* Art Style Section */}
-        <div>
-           <h3 className="text-xs font-bold text-slate-500 uppercase mb-3">Art Direction</h3>
-           <textarea 
-             className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-sm text-white h-24 focus:outline-none focus:border-amber-500 transition-colors resize-none"
-             value={styleDNA.artStyle.influences.join(', ')}
-             onChange={(e) => onChange({...styleDNA, artStyle: {...styleDNA.artStyle, influences: e.target.value.split(', ')}})}
-           />
-           <p className="text-xs text-slate-500 mt-1">Comma separated influences</p>
         </div>
       </div>
     </div>

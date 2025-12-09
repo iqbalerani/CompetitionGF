@@ -1,4 +1,5 @@
 
+
 import { StyleDNA, NodeType } from './types';
 import { 
   Layout, Map, Image as ImageIcon, User, Box, 
@@ -24,6 +25,8 @@ export const DEFAULT_STYLE_DNA: StyleDNA = {
   },
   artStyle: {
     rendering: "painterly",
+    era: "Modern Fantasy",
+    texture: "Detailed Digital Painting",
     influences: ["Dark Souls", "Elden Ring"],
   },
 };

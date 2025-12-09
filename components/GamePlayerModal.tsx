@@ -18,7 +18,13 @@ const GamePlayerModal: React.FC<GamePlayerModalProps> = ({ gameCode, onClose }) 
   const handleRestart = () => {
     if (iframeRef.current) {
       iframeRef.current.srcdoc = gameCode;
+      iframeRef.current.focus();
     }
+  };
+
+  const handleIframeLoad = () => {
+    // Focus the iframe so keyboard events are captured immediately
+    iframeRef.current?.focus();
   };
 
   return (
@@ -65,6 +71,7 @@ const GamePlayerModal: React.FC<GamePlayerModalProps> = ({ gameCode, onClose }) 
             className="w-full h-full border-0 block"
             sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-forms"
             allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+            onLoad={handleIframeLoad}
           />
         </div>
       </div>

@@ -1,11 +1,13 @@
 
+
 import React, { useState } from 'react';
 import { Node, Edge } from 'reactflow';
 import { NodeData, StyleDNA, GameMode } from '../types';
 import { NODE_TYPES_CONFIG } from '../constants';
-import { Sparkles, Wand2, Download, RefreshCw, Layers, Lock, Unlock, Maximize2 } from 'lucide-react';
-import { generateDescription, generateGameAsset } from '../services/geminiService';
+import { Sparkles, Wand2, Download, RefreshCw, Layers, Lock, Unlock, Maximize2, Box, Eye } from 'lucide-react';
+import { generateDescription, generateGameAsset, generateDepthMap } from '../services/geminiService';
 import { useImageZoom } from '../contexts/ImageZoomContext';
+import Model3DViewer from './Model3DViewer';
 
 interface GenerationPanelProps {
   selectedNode: Node<NodeData> | null;
@@ -19,6 +21,9 @@ interface GenerationPanelProps {
 const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDNA, onUpdateNode, edges, nodes, gameMode }) => {
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [isGenerating3D, setIsGenerating3D] = useState(false);
+  const [show3DViewer, setShow3DViewer] = useState(false);
+  
   const { setZoomedImage } = useImageZoom();
 
   if (!selectedNode) {
@@ -56,7 +61,8 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
         selectedNode.data.type, 
         selectedNode.data.subtype, 
         selectedNode.data.label, 
-        context
+        context,
+        selectedNode.data.description // Pass existing description to be enhanced
       );
       onUpdateNode(selectedNode.id, { description: desc });
     } finally {
@@ -90,6 +96,25 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
       onUpdateNode(selectedNode.id, { status: 'draft' });
     } finally {
       setIsGeneratingImage(false);
+    }
+  };
+
+  const handleGenerate3D = async () => {
+    if (isLocked || !selectedNode.data.image) return;
+    setIsGenerating3D(true);
+    try {
+      const depthMap = await generateDepthMap(selectedNode.data.image);
+      if (depthMap) {
+        onUpdateNode(selectedNode.id, { depthMap });
+        setShow3DViewer(true);
+      } else {
+        alert("Failed to generate 3D model data.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Error generating 3D model.");
+    } finally {
+      setIsGenerating3D(false);
     }
   };
 
@@ -180,8 +205,8 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
           <div className="grid grid-cols-2 gap-2 text-xs text-slate-400">
             <div>Mode: <span className="text-slate-200">{styleDNA.lighting.style}</span></div>
             <div>Mood: <span className="text-slate-200">{styleDNA.colorPalette.mood}</span></div>
-            <div>Camera: <span className="text-slate-200">{styleDNA.camera.angle}</span></div>
-            <div>Render: <span className="text-slate-200">{styleDNA.artStyle.rendering}</span></div>
+            <div>Era: <span className="text-slate-200">{styleDNA.artStyle.era || 'Standard'}</span></div>
+            <div>Texture: <span className="text-slate-200">{styleDNA.artStyle.texture || 'Default'}</span></div>
           </div>
         </div>
 
@@ -205,6 +230,38 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
             <> <Sparkles /> Generate {gameMode} Concept </>
           )}
         </button>
+        
+        {/* 3D Generation / View Action */}
+        {selectedNode.data.image && !isGeneratingImage && (
+           <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setZoomedImage(selectedNode.data.image!)}
+                className="py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-bold flex items-center justify-center gap-2"
+              >
+                <Maximize2 size={14} /> View Full
+              </button>
+
+              <button
+                onClick={selectedNode.data.depthMap ? () => setShow3DViewer(true) : handleGenerate3D}
+                disabled={isGenerating3D}
+                className={`
+                  py-2 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-2 transition-colors
+                  ${selectedNode.data.depthMap 
+                    ? 'bg-indigo-600 hover:bg-indigo-500 border-indigo-500 text-white shadow-lg shadow-indigo-900/20' 
+                    : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-indigo-400'
+                  }
+                `}
+              >
+                {isGenerating3D ? (
+                  <> <RefreshCw size={14} className="animate-spin" /> Processing... </>
+                ) : selectedNode.data.depthMap ? (
+                  <> <Box size={14} /> View 3D Model </>
+                ) : (
+                  <> <Box size={14} /> Convert to 3D </>
+                )}
+              </button>
+           </div>
+        )}
 
         {/* Preview Area */}
         {selectedNode.data.image && (
@@ -243,6 +300,15 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
            </div>
         )}
       </div>
+
+      {/* 3D Viewer Modal */}
+      {show3DViewer && selectedNode.data.image && selectedNode.data.depthMap && (
+        <Model3DViewer 
+          imageUrl={selectedNode.data.image} 
+          depthMapUrl={selectedNode.data.depthMap} 
+          onClose={() => setShow3DViewer(false)} 
+        />
+      )}
     </div>
   );
 };
