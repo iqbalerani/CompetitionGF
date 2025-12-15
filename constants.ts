@@ -29,6 +29,14 @@ export const DEFAULT_STYLE_DNA: StyleDNA = {
     texture: "Detailed Digital Painting",
     influences: ["Dark Souls", "Elden Ring"],
   },
+  // FIBO-specific advanced controls
+  fibo: {
+    composition: 'centered',
+    detail_level: 'high',
+    style_strength: 0.75,
+    negative_prompt: 'blurry, low quality, distorted, deformed, watermark',
+    num_inference_steps: 30,
+  },
 };
 
 export const NODE_TYPES_CONFIG: Record<NodeType, { 

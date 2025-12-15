@@ -1,0 +1,40 @@
+# Cloudflare Worker Configuration for R2 Uploads
+# https://developers.cloudflare.com/workers/wrangler/configuration/
+
+name = "gameforge-r2-upload"
+main = "r2-upload.js"
+compatibility_date = "2025-01-01"
+
+# R2 Bucket Binding (No API keys needed!)
+# This binds your vybe-images bucket to the Worker
+[[r2_buckets]]
+binding = "R2_BUCKET"
+bucket_name = "vybe-images"
+
+# Environment Variables
+# Set these when deploying: wrangler secret put PUBLIC_URL
+[vars]
+PUBLIC_URL = "https://pub-be25d8676c914843bf4db50712874cc0.r2.dev"
+
+# Development settings
+[env.development]
+name = "gameforge-r2-upload-dev"
+
+# Production settings
+[env.production]
+name = "gameforge-r2-upload"
+
+# Route configuration (optional - if you want custom domain)
+# Uncomment and configure if you have a custom domain
+# routes = [
+#   { pattern = "your-domain.com/api/r2-upload", zone_name = "your-domain.com" }
+# ]
+
+# Usage model (bundled = free tier, unbound = higher limits)
+# https://developers.cloudflare.com/workers/platform/pricing/
+usage_model = "bundled"
+
+# Limits
+# Free tier: 100,000 requests/day, 10ms CPU time per request
+# Paid: Unlimited requests, 50ms CPU time
+limits = { cpu_ms = 10 }

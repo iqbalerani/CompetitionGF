@@ -1,17 +1,11 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { StyleDNA, BlueprintParams, GameMode } from "../types";
 import { DEFAULT_STYLE_DNA } from "../constants";
+import { generateWithFIBO } from "./briaService";
+import { generateText, generateJSON } from "./openrouterClient";
 
-// In a real app, strict error handling would be here.
-// We assume process.env.API_KEY is available as per instructions.
-
-const getAiClient = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    console.error("API Key not found");
-  }
-  return new GoogleGenAI({ apiKey: apiKey || 'dummy-key' });
-};
+// OpenRouter configuration
+// Uses environment variables: OPENROUTER_API_KEY and MODEL
+// Default model: google/gemini-2.5-flash-lite
 
 const TYPE_SPECIFIC_INSTRUCTIONS: Record<string, string> = {
   // World / Environment
@@ -51,9 +45,6 @@ export const generateDescription = async (
   existingDescription?: string
 ): Promise<string> => {
   try {
-    const ai = getAiClient();
-    const model = "gemini-2.5-flash";
-    
     const targetType = subtype || nodeType;
     let prompt = "";
 
@@ -64,9 +55,9 @@ export const generateDescription = async (
         Enhance and refine the following description for a ${targetType} named "${nodeName}".
 
         USER INPUT: "${existingDescription}"
-        
+
         Context/Influences: ${context}
-        
+
         Instructions:
         - Keep the core intent of the user's input but make it more vivid and descriptive.
         - Focus on visual details suitable for concept art generation.
@@ -79,27 +70,23 @@ export const generateDescription = async (
        prompt = `
         You are a creative director for a game studio.
         Write a concise, vivid visual description (max 50 words) for a ${targetType} named "${nodeName}".
-        
+
         Context/Influences: ${context}
-        
+
         Instructions:
         - Focus on visual elements suitable for concept art generation.
         - If it is a 'tilemap', describe the textures and ground types.
         - If it is a 'level', describe the layout structure and obstacles.
         - If it is a 'ui' element, describe the shapes, colors, and layout.
-        
+
         Output exactly the description, nothing else.
       `;
     }
 
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-    });
-
-    return response.text?.trim() || "A mysterious entity awaiting definition.";
+    const response = await generateText(prompt);
+    return response.trim() || "A mysterious entity awaiting definition.";
   } catch (error) {
-    console.error("Gemini Description Error:", error);
+    console.error("Description Generation Error:", error);
     return `Failed to generate description for ${nodeName}.`;
   }
 };
@@ -108,9 +95,6 @@ export const generateAdaptiveStyleDNA = async (
   params: BlueprintParams | string
 ): Promise<StyleDNA | null> => {
   try {
-    const ai = getAiClient();
-    const model = "gemini-2.5-flash";
-
     let inputDescription = "";
     let gameMode = "3D";
 
@@ -131,76 +115,58 @@ export const generateAdaptiveStyleDNA = async (
     const prompt = `
       Act as an Art Director.
       Create a "Style DNA" visual guide configuration for a game based on the description below.
-      The output must be a JSON object matching the schema.
 
       GAME DESCRIPTION:
       ${inputDescription}
 
       CRITICAL INSTRUCTIONS:
-      1. Game Mode is: ${gameMode}. 
+      1. Game Mode is: ${gameMode}.
          - If '2D': Adapt the 'texture' and 'rendering' for 2D (e.g., 'Pixel Art', 'Vector', 'Hand-drawn').
          - If '3D': Adapt for 3D (e.g., 'Low Poly', 'PBR Realistic', 'Cel Shaded').
       2. 'era' should define the visual period (e.g., '8-bit Retro', '90s Arcade', 'PS1 Era', 'Modern', 'Futuristic').
       3. 'texture' should define the surface detail style (e.g., 'Noisy Pixel', 'Flat', 'High-Res Diffuse', 'Painterly').
-      4. Colors should be cohesive.
+      4. Colors should be cohesive hex codes.
       5. Mood/Lighting should match the genre.
 
-      Output JSON format only.
-    `;
-
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            name: { type: Type.STRING },
-            version: { type: Type.STRING },
-            colorPalette: {
-              type: Type.OBJECT,
-              properties: {
-                primary: { type: Type.ARRAY, items: { type: Type.STRING } },
-                accent: { type: Type.ARRAY, items: { type: Type.STRING } },
-                mood: { type: Type.STRING, enum: ['warm', 'cool', 'neutral', 'vibrant', 'muted'] }
-              },
-              required: ['primary', 'accent', 'mood']
-            },
-            lighting: {
-              type: Type.OBJECT,
-              properties: {
-                style: { type: Type.STRING, enum: ['natural', 'studio', 'dramatic', 'soft', 'hard'] },
-                intensity: { type: Type.NUMBER }
-              },
-              required: ['style', 'intensity']
-            },
-            camera: {
-              type: Type.OBJECT,
-              properties: {
-                fov: { type: Type.NUMBER },
-                angle: { type: Type.STRING, enum: ['eye_level', 'low_angle', 'high_angle'] }
-              },
-              required: ['fov', 'angle']
-            },
-            artStyle: {
-              type: Type.OBJECT,
-              properties: {
-                rendering: { type: Type.STRING },
-                era: { type: Type.STRING },
-                texture: { type: Type.STRING },
-                influences: { type: Type.ARRAY, items: { type: Type.STRING } }
-              },
-              required: ['rendering', 'era', 'texture', 'influences']
-            }
-          },
-          required: ['name', 'colorPalette', 'lighting', 'camera', 'artStyle']
+      REQUIRED JSON SCHEMA:
+      {
+        "name": "string (name of the style)",
+        "version": "string (e.g., '1.0')",
+        "colorPalette": {
+          "primary": ["hex color", "hex color", "hex color"],
+          "accent": ["hex color", "hex color"],
+          "mood": "warm" | "cool" | "neutral" | "vibrant" | "muted"
+        },
+        "lighting": {
+          "style": "natural" | "studio" | "dramatic" | "soft" | "hard",
+          "intensity": number (0-1)
+        },
+        "camera": {
+          "fov": number (15-120),
+          "angle": "eye_level" | "low_angle" | "high_angle"
+        },
+        "artStyle": {
+          "rendering": "string",
+          "era": "string",
+          "texture": "string",
+          "influences": ["string", "string"]
+        },
+        "fibo": {
+          "composition": "centered",
+          "detail_level": "high",
+          "style_strength": 0.75,
+          "negative_prompt": "blurry, low quality, distorted, deformed",
+          "num_inference_steps": 30
         }
       }
-    });
 
-    if (response.text) {
-      return JSON.parse(response.text) as StyleDNA;
+      Output ONLY valid JSON matching this schema. No markdown, no explanation.
+    `;
+
+    const response = await generateJSON(prompt);
+
+    if (response) {
+      return JSON.parse(response) as StyleDNA;
     }
     return null;
 
@@ -211,6 +177,56 @@ export const generateAdaptiveStyleDNA = async (
 };
 
 export const generateGameAsset = async (
+  prompt: string,
+  styleDNA: StyleDNA,
+  nodeType: string,
+  nodeSubtype: string | undefined,
+  context: string = "",
+  gameMode: GameMode = '3D',
+  perspectiveOverride?: string
+): Promise<string | null> => {
+  // ============================================================================
+  // BRIA FIBO INTEGRATION
+  // This function now uses Bria's FIBO model instead of Gemini for image generation
+  // FIBO provides:
+  // - JSON-native controllability through structured parameters
+  // - 1+ billion fully licensed training images (commercial-safe)
+  // - Consistent style across multiple assets
+  // ============================================================================
+
+  try {
+    console.log('🎨 Using Bria FIBO for image generation');
+
+    // Use Bria FIBO for all image generation
+    const imageUrl = await generateWithFIBO(
+      prompt,
+      styleDNA,
+      nodeType,
+      nodeSubtype,
+      context,
+      gameMode,
+      perspectiveOverride
+    );
+
+    if (imageUrl) {
+      return imageUrl;
+    }
+
+    // If FIBO fails, log the error and return null
+    console.warn('⚠️ FIBO generation failed, returning null');
+    return null;
+
+  } catch (error) {
+    console.error("Asset Generation Error:", error);
+    return null;
+  }
+};
+
+// ============================================================================
+// DEPRECATED: Old Gemini Image Generation (kept for reference)
+// This code is no longer used but preserved for potential fallback
+// ============================================================================
+export const generateGameAssetWithGemini_DEPRECATED = async (
   prompt: string,
   styleDNA: StyleDNA,
   nodeType: string,
@@ -299,7 +315,13 @@ export const generateGameAsset = async (
   }
 };
 
+// DEPRECATED: Depth map generation using Gemini is no longer supported
+// Use Bria FIBO for all image generation instead
 export const generateDepthMap = async (originalImageBase64: string): Promise<string | null> => {
+  console.warn('⚠️ generateDepthMap is deprecated. This feature is not supported with OpenRouter.');
+  return null;
+
+  /* DEPRECATED CODE - Kept for reference
   try {
     const ai = getAiClient();
     const model = "gemini-2.5-flash-image";
@@ -344,6 +366,7 @@ export const generateDepthMap = async (originalImageBase64: string): Promise<str
     console.error("Depth Map Generation Error:", error);
     return null;
   }
+  */
 };
 
 interface BlueprintNode {
@@ -367,12 +390,9 @@ interface BlueprintResponse {
 
 export const generateFullGameBlueprint = async (params: BlueprintParams): Promise<BlueprintResponse | null> => {
   try {
-    const ai = getAiClient();
-    const model = "gemini-2.5-flash";
-
     const prompt = `
       Act as a Lead Game Designer. Create a cohesive game design blueprint based on the following specification:
-      
+
       GAME MODE: ${params.gameMode} (Critical: Ensure all assets and descriptions match this mode).
       CORE CONCEPT: ${params.prompt}
       PLATFORM: ${params.platform}
@@ -389,11 +409,11 @@ export const generateFullGameBlueprint = async (params: BlueprintParams): Promis
       4. Protagonist & Antagonist
       5. Core Mechanics (Use 'mechanic' type)
       6. UI Elements (Use 'ui' type)
-      
+
       Ensure strict logical connection: World -> Zones -> Scenes -> Characters/Mechanics/UI.
-      
+
       Valid Types: 'world', 'zone', 'scene', 'character', 'prop', 'mechanic', 'ui'.
-      Valid Subtypes (Prioritize based on ${params.gameMode}): 
+      Valid Subtypes (Prioritize based on ${params.gameMode}):
         - world: 'world', 'faction'
         - zone: 'zone', 'biome', 'tilemap' (2D), 'level' (2D), 'terrain' (3D), 'skybox' (3D), 'parallax' (2D)
         - scene: 'scene', 'key_art', 'storyboard'
@@ -402,77 +422,57 @@ export const generateFullGameBlueprint = async (params: BlueprintParams): Promis
         - mechanic: 'system', 'loop', 'physics', 'platforming'
         - ui: 'hud', 'menu', 'inventory'
 
-      Return a JSON object with 'gameTitle', 'nodes' (array), and 'edges' (array).
-      Ensure IDs are unique strings (e.g., 'n1', 'n2').
+      REQUIRED JSON SCHEMA:
+      {
+        "gameTitle": "string",
+        "nodes": [
+          {
+            "id": "string (e.g., 'n1', 'n2')",
+            "type": "string (one of: world, zone, scene, character, prop, mechanic, ui)",
+            "subtype": "string (specific subtype from list above)",
+            "label": "string (name)",
+            "description": "string (vivid visual description, max 20 words)"
+          }
+        ],
+        "edges": [
+          {
+            "source": "string (node id)",
+            "target": "string (node id)"
+          }
+        ]
+      }
+
+      Ensure IDs are unique strings.
       Descriptions should be vivid and visual (max 20 words).
       For 'tilemap' or 'level' nodes, describe the layout structure specifically.
+
+      Output ONLY valid JSON matching this schema. No markdown, no explanation.
     `;
 
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            gameTitle: { type: Type.STRING },
-            nodes: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  type: { type: Type.STRING },
-                  subtype: { type: Type.STRING },
-                  label: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                },
-                required: ["id", "type", "subtype", "label", "description"]
-              }
-            },
-            edges: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  source: { type: Type.STRING },
-                  target: { type: Type.STRING },
-                },
-                required: ["source", "target"]
-              }
-            }
-          },
-          required: ["gameTitle", "nodes", "edges"]
-        }
-      }
-    });
+    const response = await generateJSON(prompt, { maxTokens: 4000 });
 
-    if (response.text) {
-      return JSON.parse(response.text) as BlueprintResponse;
+    if (response) {
+      return JSON.parse(response) as BlueprintResponse;
     }
     return null;
 
   } catch (error) {
-    console.error("Gemini Blueprint Generation Error:", error);
+    console.error("Blueprint Generation Error:", error);
     return null;
   }
 };
 
 export const generatePlayableGame = async (
-  nodes: any[], 
-  gameMode: string, 
+  nodes: any[],
+  gameMode: string,
   styleDNA: StyleDNA
 ): Promise<string> => {
   try {
-    const ai = getAiClient();
-    const model = "gemini-2.5-flash"; 
-
     // Construct a rich context with node descriptions and placeholders for images
     // We use placeholders to prevent hitting token limits with large base64 strings
     const contextNodes = nodes.map(n => {
        const hasImage = !!n.data.image;
-       
+
        let imageRef = "undefined";
        if (hasImage) {
          imageRef = `__GAMEFORGE_ASSET_${n.id}__`;
@@ -578,12 +578,9 @@ export const generatePlayableGame = async (
       OUTPUT RAW HTML ONLY. NO MARKDOWN. DO NOT WRAP IN \`\`\`.
     `;
 
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-    });
+    const response = await generateText(prompt, { maxTokens: 8000 });
 
-    let code = response.text || "";
+    let code = response || "";
     // Cleanup if the model wraps it despite instructions
     code = code.replace(/```html/g, '').replace(/```/g, '');
 

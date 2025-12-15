@@ -4,6 +4,16 @@ export type NodeType = 'world' | 'zone' | 'scene' | 'character' | 'prop' | 'mech
 
 export type GameMode = '2D' | '3D';
 
+// FIBO-specific parameters for enhanced controllability
+export interface FIBOParameters {
+  composition?: 'centered' | 'rule_of_thirds' | 'dynamic' | 'portrait' | 'landscape';
+  detail_level?: 'low' | 'medium' | 'high' | 'ultra';
+  style_strength?: number; // 0-1, how strongly to apply the style
+  negative_prompt?: string; // What to avoid in generation
+  seed?: number; // For reproducibility
+  num_inference_steps?: number; // Quality vs speed tradeoff
+}
+
 export interface StyleDNA {
   name: string;
   version: string;
@@ -26,6 +36,8 @@ export interface StyleDNA {
     texture: string; // New: e.g. 'Pixelated', 'Hand-painted', 'Photorealistic'
     influences: string[];
   };
+  // FIBO-specific advanced controls
+  fibo?: FIBOParameters;
 }
 
 export interface NodeData {

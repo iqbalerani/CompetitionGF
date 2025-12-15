@@ -35,8 +35,10 @@ import NodeLibrary from './components/NodeLibrary';
 import ImagePreviewModal from './components/ImagePreviewModal';
 import BlueprintWizard from './components/BlueprintWizard';
 import GamePlayerModal from './components/GamePlayerModal';
+import LicenseCompliance from './components/LicenseCompliance';
 import { ImageZoomProvider } from './contexts/ImageZoomContext';
 import { generateFullGameBlueprint, generateGameAsset, generatePlayableGame, generateAdaptiveStyleDNA } from './services/geminiService';
+import { uploadImagesToR2, generateAssetFilename, saveProjectMetadataToR2, generateMetadataFilename } from './services/cloudflareR2Service';
 import { DEFAULT_STYLE_DNA } from './constants';
 import { NodeData, NodeType, StyleDNA, BlueprintParams, GameMode } from './types';
 
@@ -84,9 +86,14 @@ function GameForgeBoard() {
 
   // Game Mode State (2D / 3D)
   const [gameMode, setGameMode] = useState<GameMode>('3D');
-  
+
   // State to track the perspective chosen in the wizard for the loading screen
   const [loadingPerspective, setLoadingPerspective] = useState<string>('3D');
+
+  // R2 Upload State
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
+  const [uploadedUrls, setUploadedUrls] = useState<string[]>([]);
 
   // Custom Node Types Registration
   const nodeTypes = useMemo<NodeTypes>(() => ({ custom: CustomNode }), []);
@@ -328,10 +335,120 @@ function GameForgeBoard() {
     }
   };
 
+  /**
+   * Save all generated images to Cloudflare R2
+   */
+  const handleSaveToR2 = async () => {
+    console.log('🔍 [DEBUG] handleSaveToR2 called - button click registered');
+
+    // Collect all nodes with images
+    const nodesWithImages = nodes.filter(n => n.data.image);
+
+    console.log(`🔍 [DEBUG] Found ${nodesWithImages.length} nodes with images`);
+
+    if (nodesWithImages.length === 0) {
+      alert('No generated images to save. Generate some assets first!');
+      return;
+    }
+
+    // Check if Worker URL is configured
+    const workerUrl = import.meta.env.VITE_WORKER_URL;
+    console.log(`🔍 [DEBUG] VITE_WORKER_URL value: "${workerUrl}"`);
+
+    if (!workerUrl || workerUrl === 'YOUR_WORKER_URL_HERE') {
+      alert('⚠️ Worker URL not configured!\n\nDeploy the Cloudflare Worker first, then add VITE_WORKER_URL to .env.local\n\nSee WORKER_SETUP_GUIDE.md for instructions.');
+      console.error('');
+      console.error('🚨 Cloudflare Worker not configured!');
+      console.error('');
+      console.error('Follow these steps:');
+      console.error('1. cd workers');
+      console.error('2. npx wrangler login');
+      console.error('3. npx wrangler deploy');
+      console.error('4. Copy the Worker URL from output');
+      console.error('5. Add VITE_WORKER_URL=https://your-worker.workers.dev to .env.local');
+      console.error('6. Restart dev server: npm run dev');
+      console.error('');
+      console.error('See WORKER_SETUP_GUIDE.md for detailed instructions.');
+      console.error('');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress({ current: 0, total: nodesWithImages.length });
+
+    try {
+      // Prepare images for upload
+      const imagesToUpload = nodesWithImages.map(node => ({
+        data: node.data.image!,
+        filename: generateAssetFilename(node.id, node.data.subtype || node.data.type)
+      }));
+
+      console.log(`📤 Uploading ${imagesToUpload.length} images to R2...`);
+
+      // Upload images with progress tracking
+      const urls = await uploadImagesToR2(
+        imagesToUpload,
+        (current, total) => {
+          setUploadProgress({ current, total });
+          console.log(`✅ Uploaded ${current}/${total} images`);
+        }
+      );
+
+      setUploadedUrls(urls);
+
+      // Optionally save project metadata
+      const projectName = nodes.find(n => n.data.type === 'world')?.data.label || 'game-project';
+      const metadata = {
+        projectName,
+        gameMode,
+        styleDNA,
+        nodes: nodes.map(n => ({
+          id: n.id,
+          label: n.data.label,
+          type: n.data.type,
+          subtype: n.data.subtype,
+          description: n.data.description,
+          imageUrl: urls[nodesWithImages.findIndex(node => node.id === n.id)] || null
+        })),
+        generatedAt: new Date().toISOString(),
+        totalAssets: nodesWithImages.length
+      };
+
+      const metadataUrl = await saveProjectMetadataToR2(
+        metadata,
+        generateMetadataFilename(projectName)
+      );
+
+      // Success notification
+      console.log('');
+      console.log('🎉 SUCCESS! All images uploaded to R2!');
+      console.log('');
+      console.log('📸 Image URLs:');
+      urls.forEach((url, i) => {
+        console.log(`  ${i + 1}. ${url}`);
+      });
+      console.log('');
+      console.log(`📄 Project Metadata: ${metadataUrl}`);
+      console.log('');
+
+      alert(`✅ Success! Uploaded ${urls.length} images to Cloudflare R2!\n\nCheck browser console for URLs.`);
+
+    } catch (error: any) {
+      console.error('❌ R2 Upload Failed:', error);
+      alert(`Failed to upload to R2: ${error.message}\n\nCheck browser console for details.`);
+    } finally {
+      setIsUploading(false);
+      setUploadProgress({ current: 0, total: 0 });
+    }
+  };
+
   const selectedNode = useMemo(
     () => nodes.find((n) => n.id === selectedNodeId) || null,
     [nodes, selectedNodeId]
   );
+
+  // Count generated assets for licensing compliance display
+  const generatedAssetCount = nodes.filter(n => n.data.image).length;
 
   return (
     <div className="w-screen h-screen flex overflow-hidden bg-slate-950 text-slate-200 font-sans">
@@ -357,6 +474,28 @@ function GameForgeBoard() {
            </div>
            <h2 className="mt-8 text-2xl font-bold text-white tracking-widest uppercase">Compiling Game Prototype</h2>
            <p className="text-green-400 mt-2 font-mono text-sm animate-pulse">Injecting assets • Generating physics • Baking lighting</p>
+        </div>
+      )}
+
+      {/* Loading Overlay - R2 Upload */}
+      {isUploading && (
+        <div className="absolute inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center">
+           <div className="relative group">
+             <div className="absolute inset-0 bg-blue-500 blur-2xl opacity-20 animate-pulse"></div>
+             <Share2 size={64} className="text-blue-500 animate-pulse relative z-10" />
+           </div>
+           <h2 className="mt-8 text-2xl font-bold text-white tracking-widest uppercase">Uploading to Cloudflare R2</h2>
+           <p className="text-blue-400 mt-2 font-mono text-sm">
+             {uploadProgress.current > 0
+               ? `${uploadProgress.current} / ${uploadProgress.total} images uploaded...`
+               : 'Preparing upload...'}
+           </p>
+           <div className="mt-4 w-64 h-2 bg-slate-800 rounded-full overflow-hidden">
+             <div
+               className="h-full bg-blue-500 transition-all duration-300"
+               style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+             ></div>
+           </div>
         </div>
       )}
 
@@ -448,20 +587,33 @@ function GameForgeBoard() {
              <button className="p-2 bg-slate-900 border border-slate-700 rounded-md text-slate-400 hover:text-white hover:bg-slate-800">
                <Undo size={18} />
              </button>
-             <button className="p-2 bg-slate-900 border border-slate-700 rounded-md text-slate-400 hover:text-white hover:bg-slate-800">
-               <Save size={18} />
-             </button>
-             <button className="p-2 bg-amber-600 border border-amber-500 rounded-md text-white hover:bg-amber-500 shadow-lg shadow-amber-900/20">
-               <Share2 size={18} />
+             <button
+               onClick={handleSaveToR2}
+               disabled={isUploading}
+               className={`p-2 border rounded-md shadow-lg transition-all ${
+                 isUploading
+                   ? 'bg-slate-700 border-slate-600 text-slate-400 cursor-not-allowed'
+                   : 'bg-amber-600 border-amber-500 text-white hover:bg-amber-500 shadow-amber-900/20'
+               }`}
+               title="Save all images to Cloudflare R2"
+             >
+               {isUploading ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
              </button>
           </div>
         </div>
 
         {/* Node Library (Left) */}
-        <div className="absolute left-4 top-24 bottom-4 z-10 pointer-events-none flex flex-col justify-start">
+        <div className="absolute left-4 top-24 bottom-4 z-10 pointer-events-none flex flex-col justify-start gap-4">
            <div className="pointer-events-auto">
               <NodeLibrary onAddNode={addNewNode} gameMode={gameMode} />
            </div>
+
+           {/* License Compliance Info (Bottom Left) */}
+           {generatedAssetCount > 0 && (
+             <div className="pointer-events-auto w-80">
+               <LicenseCompliance assetCount={generatedAssetCount} />
+             </div>
+           )}
         </div>
 
         {/* React Flow Canvas */}

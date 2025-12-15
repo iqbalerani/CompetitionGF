@@ -4,8 +4,9 @@ import React, { useState } from 'react';
 import { Node, Edge } from 'reactflow';
 import { NodeData, StyleDNA, GameMode } from '../types';
 import { NODE_TYPES_CONFIG } from '../constants';
-import { Sparkles, Wand2, Download, RefreshCw, Layers, Lock, Unlock, Maximize2, Box, Eye } from 'lucide-react';
+import { Sparkles, Wand2, Download, RefreshCw, Layers, Lock, Unlock, Maximize2, Box, Eye, Code } from 'lucide-react';
 import { generateDescription, generateGameAsset, generateDepthMap } from '../services/geminiService';
+import { extractFIBOParams } from '../services/briaService';
 import { useImageZoom } from '../contexts/ImageZoomContext';
 import Model3DViewer from './Model3DViewer';
 
@@ -21,9 +22,11 @@ interface GenerationPanelProps {
 const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDNA, onUpdateNode, edges, nodes, gameMode }) => {
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [isGenerating3D, setIsGenerating3D] = useState(false);
-  const [show3DViewer, setShow3DViewer] = useState(false);
-  
+  // COMMENTED OUT: 3D generation state variables
+  // const [isGenerating3D, setIsGenerating3D] = useState(false);
+  // const [show3DViewer, setShow3DViewer] = useState(false);
+  const [showJSONInspector, setShowJSONInspector] = useState(false);
+
   const { setZoomedImage } = useImageZoom();
 
   if (!selectedNode) {
@@ -99,24 +102,25 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
     }
   };
 
-  const handleGenerate3D = async () => {
-    if (isLocked || !selectedNode.data.image) return;
-    setIsGenerating3D(true);
-    try {
-      const depthMap = await generateDepthMap(selectedNode.data.image);
-      if (depthMap) {
-        onUpdateNode(selectedNode.id, { depthMap });
-        setShow3DViewer(true);
-      } else {
-        alert("Failed to generate 3D model data.");
-      }
-    } catch (e) {
-      console.error(e);
-      alert("Error generating 3D model.");
-    } finally {
-      setIsGenerating3D(false);
-    }
-  };
+  // COMMENTED OUT: 3D generation feature temporarily disabled
+  // const handleGenerate3D = async () => {
+  //   if (isLocked || !selectedNode.data.image) return;
+  //   setIsGenerating3D(true);
+  //   try {
+  //     const depthMap = await generateDepthMap(selectedNode.data.image);
+  //     if (depthMap) {
+  //       onUpdateNode(selectedNode.id, { depthMap });
+  //       setShow3DViewer(true);
+  //     } else {
+  //       alert("Failed to generate 3D model data.");
+  //     }
+  //   } catch (e) {
+  //     console.error(e);
+  //     alert("Error generating 3D model.");
+  //   } finally {
+  //     setIsGenerating3D(false);
+  //   }
+  // };
 
   const toggleLock = () => {
     onUpdateNode(selectedNode.id, { locked: !isLocked });
@@ -210,6 +214,44 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
           </div>
         </div>
 
+        {/* FIBO JSON Inspector */}
+        <div className="bg-gradient-to-br from-purple-900/20 to-indigo-900/20 rounded-lg border border-purple-500/30 overflow-hidden">
+          <button
+            onClick={() => setShowJSONInspector(!showJSONInspector)}
+            className="w-full px-3 py-2 flex items-center justify-between text-sm hover:bg-purple-500/10 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Code size={14} className="text-purple-400" />
+              <span className="font-bold text-purple-300">FIBO JSON Parameters</span>
+            </div>
+            <span className="text-purple-400 text-xs">
+              {showJSONInspector ? '▼' : '▶'}
+            </span>
+          </button>
+
+          {showJSONInspector && (
+            <div className="p-3 border-t border-purple-500/20">
+              <p className="text-[10px] text-purple-400/60 mb-2">
+                JSON-native parameters used for Bria FIBO generation:
+              </p>
+              <pre className="bg-slate-950/50 rounded p-2 text-[10px] text-slate-300 overflow-x-auto border border-slate-700/50 font-mono">
+                {JSON.stringify(
+                  extractFIBOParams(
+                    styleDNA,
+                    selectedNode.data.subtype || selectedNode.data.type,
+                    gameMode
+                  ),
+                  null,
+                  2
+                )}
+              </pre>
+              <div className="mt-2 flex items-center gap-1 text-[9px] text-purple-400/40">
+                <span>💡 These parameters ensure consistency across your game assets</span>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Generation Action */}
         <button
           onClick={handleGenerateImage}
@@ -231,8 +273,18 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
           )}
         </button>
         
-        {/* 3D Generation / View Action */}
+        {/* View Full Action */}
         {selectedNode.data.image && !isGeneratingImage && (
+           <button
+             onClick={() => setZoomedImage(selectedNode.data.image!)}
+             className="w-full py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-bold flex items-center justify-center gap-2"
+           >
+             <Maximize2 size={14} /> View Full
+           </button>
+        )}
+
+        {/* COMMENTED OUT: 3D Generation / View Action */}
+        {/* {selectedNode.data.image && !isGeneratingImage && (
            <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => setZoomedImage(selectedNode.data.image!)}
@@ -246,8 +298,8 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
                 disabled={isGenerating3D}
                 className={`
                   py-2 px-3 rounded-lg border text-xs font-bold flex items-center justify-center gap-2 transition-colors
-                  ${selectedNode.data.depthMap 
-                    ? 'bg-indigo-600 hover:bg-indigo-500 border-indigo-500 text-white shadow-lg shadow-indigo-900/20' 
+                  ${selectedNode.data.depthMap
+                    ? 'bg-indigo-600 hover:bg-indigo-500 border-indigo-500 text-white shadow-lg shadow-indigo-900/20'
                     : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-indigo-400'
                   }
                 `}
@@ -261,7 +313,7 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
                 )}
               </button>
            </div>
-        )}
+        )} */}
 
         {/* Preview Area */}
         {selectedNode.data.image && (
@@ -301,14 +353,14 @@ const GenerationPanel: React.FC<GenerationPanelProps> = ({ selectedNode, styleDN
         )}
       </div>
 
-      {/* 3D Viewer Modal */}
-      {show3DViewer && selectedNode.data.image && selectedNode.data.depthMap && (
-        <Model3DViewer 
-          imageUrl={selectedNode.data.image} 
-          depthMapUrl={selectedNode.data.depthMap} 
-          onClose={() => setShow3DViewer(false)} 
+      {/* COMMENTED OUT: 3D Viewer Modal */}
+      {/* {show3DViewer && selectedNode.data.image && selectedNode.data.depthMap && (
+        <Model3DViewer
+          imageUrl={selectedNode.data.image}
+          depthMapUrl={selectedNode.data.depthMap}
+          onClose={() => setShow3DViewer(false)}
         />
-      )}
+      )} */}
     </div>
   );
 };
