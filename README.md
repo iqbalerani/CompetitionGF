@@ -1,7 +1,7 @@
 # GameForge - AI-Powered Game Pre-Production Studio
 
 <div align="center">
-<img width="1200" height="475" alt="GameForge Banner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+<img width="1200" height="475" alt="GameForge Banner" src="assets/Screenshot 2025-12-15 at 3.42.08 PM-2.png" />
 </div>
 
 ## 🎮 Overview
