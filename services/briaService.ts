@@ -35,7 +35,7 @@ const initializeFalClient = () => {
 initializeFalClient();
 
 /**
- * Maps game asset node types to optimal aspect ratios for FIBO generation
+ * Maps game asset node types to optimal aspect ratios for FIBO generations
  */
 const getAspectRatioForNodeType = (nodeType: string, gameMode: GameMode): string => {
   // Aspect ratios optimized for different game asset types
